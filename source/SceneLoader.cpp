@@ -22,12 +22,9 @@ void SceneLoader::prepareToPlay (double sampleRate, int samplesPerBlock)
 void SceneLoader::processBlock (juce::AudioBuffer<float>& audioBuffer, juce::MidiBuffer& midiBuffer)
 {
     const juce::ScopedTryLock sceneTransitionLock(sceneTransitionCriticalSection);
-    if (sceneTransitionLock.isLocked())
+    if (sceneTransitionLock.isLocked() && currentScene != nullptr)
     {
-        if (currentScene != nullptr)
-        {
-            currentScene->processBlock (audioBuffer, midiBuffer);
-        }
+        currentScene->processBlock (audioBuffer, midiBuffer);
     }
 }
 void SceneLoader::releaseResources()

@@ -16,10 +16,16 @@ public:
     ~SceneLoader() override;
 
     std::unique_ptr<Scene> currentScene;
+
+    void prepareToPlay(double sampleRate, int samplesPerBlock);
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&);
+    void releaseResources();
 private:
     void loadInitialScene();
     void loadScene();
     void timerCallback() override;
+
+    juce::CriticalSection sceneTransitionCriticalSection;
 };
 
 #endif //UPBEAT_SCENELOADER_H

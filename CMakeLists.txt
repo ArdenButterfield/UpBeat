@@ -75,6 +75,9 @@ juce_add_plugin("${PROJECT_NAME}"
     # On MacOS, plugin is copied to /Users/yourname/Library/Audio/Plug-Ins/
     COPY_PLUGIN_AFTER_BUILD TRUE
 
+    IS_SYNTH TRUE                     # Is this a synth or an effect?
+    NEEDS_MIDI_INPUT TRUE             # Does the plugin need midi input?
+
     # Change me!
     # A four-character plugin id
     # First character MUST be uppercase for AU formats

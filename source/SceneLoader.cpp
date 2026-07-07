@@ -15,6 +15,24 @@ SceneLoader::SceneLoader ()
 SceneLoader::~SceneLoader()
 {
 }
+void SceneLoader::prepareToPlay (double sampleRate, int samplesPerBlock)
+{
+
+}
+void SceneLoader::processBlock (juce::AudioBuffer<float>& audioBuffer, juce::MidiBuffer& midiBuffer)
+{
+    const juce::ScopedTryLock sceneTransitionLock(sceneTransitionCriticalSection);
+    if (sceneTransitionLock.isLocked())
+    {
+        if (currentScene != nullptr)
+        {
+            currentScene->processBlock (audioBuffer, midiBuffer);
+        }
+    }
+}
+void SceneLoader::releaseResources()
+{
+}
 
 void SceneLoader::loadInitialScene()
 {
@@ -34,6 +52,7 @@ void SceneLoader::timerCallback()
 {
     if (currentScene->getSceneID() != currentScene->getDesiredSceneID())
     {
+        const juce::ScopedLock sceneLock(sceneTransitionCriticalSection);
         removeChildComponent (currentScene.get());
         switch (currentScene->getDesiredSceneID())
         {

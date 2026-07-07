@@ -22,11 +22,12 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     // editor's size to whatever you need it to be.
     setSize (400, 300);
     setResizable (true, true);
-    addAndMakeVisible (sceneLoader);
+    addAndMakeVisible (processorRef.sceneLoader);
 }
 
 PluginEditor::~PluginEditor()
 {
+    removeChildComponent (&processorRef.sceneLoader);
 }
 
 void PluginEditor::paint (juce::Graphics& g)
@@ -42,5 +43,5 @@ void PluginEditor::resized()
     area.removeFromBottom(50);
     inspectButton.setBounds (getLocalBounds().withTop (area.getBottom()).withWidth (100));
 
-    sceneLoader.setBounds (area);
+    processorRef.sceneLoader.setBounds (area);
 }

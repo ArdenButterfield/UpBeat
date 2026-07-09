@@ -12,7 +12,7 @@
 class SceneLoader : public juce::Timer, public juce::Component
 {
 public:
-    SceneLoader();
+    SceneLoader(GameState* gs);
     ~SceneLoader() override;
 
     std::unique_ptr<Scene> currentScene;
@@ -30,6 +30,7 @@ private:
     double sampleRate;
     int samplesPerBlock;
     bool prepared = false;
+    GameState* gameState;
 };
 
 #endif //UPBEAT_SCENELOADER_H

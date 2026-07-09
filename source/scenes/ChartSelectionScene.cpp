@@ -4,15 +4,30 @@
 
 #include "ChartSelectionScene.h"
 
-ChartSelectionScene::ChartSelectionScene()
+#include "../BundledResources.h"
+
+ChartSelectionScene::ChartSelectionScene(GameState* gs) : Scene(gs), desiredSceneId (SceneIDs::CHART_SELECT_SCENE)
 {
+    for (auto& entry : BundledResources::listEntries ("default_charts/midi"))
+    {
+        chartSelectionButtons.push_back (std::make_unique<juce::TextButton> (entry));
+        gameState->charts.push_back (Chart(BundledResources::loadFile (entry)));
+    }
+    for (auto& button : chartSelectionButtons)
+    {
+        addAndMakeVisible (button.get());
+    }
+
 }
+
 ChartSelectionScene::~ChartSelectionScene()
 {
 }
+
 void ChartSelectionScene::update()
 {
 }
+
 void ChartSelectionScene::paint (juce::Graphics& g)
 {
     g.fillAll(juce::Colours::black);
@@ -20,4 +35,33 @@ void ChartSelectionScene::paint (juce::Graphics& g)
     g.setFont (24);
     g.drawText ("Chart Selection", getLocalBounds(), juce::Justification::centred, 1);
 
+}
+
+void ChartSelectionScene::buttonClicked (juce::Button* b)
+{
+    int i = 0;
+    for (auto& button : chartSelectionButtons)
+    {
+        if (button.get() == b)
+        {
+            gameState->currentChart = &gameState->charts[i];
+            return;
+        }
+    }
+}
+void ChartSelectionScene::resized()
+{
+    for (int i = 0; i < chartSelectionButtons.size(); ++i)
+    {
+        chartSelectionButtons[i]->setBounds (getLocalBounds().withTrimmedLeft (10).withTrimmedRight (10).withHeight (70).withY (i * 90 + 20));
+        desiredSceneId = SceneIDs::CHART_PERFORMANCE_SCENE;
+    }
+}
+SceneIDs::SceneID ChartSelectionScene::getDesiredSceneID()
+{
+    return desiredSceneId;
+}
+SceneIDs::SceneID ChartSelectionScene::getSceneID() const
+{
+    return SceneIDs::CHART_SELECT_SCENE;
 }

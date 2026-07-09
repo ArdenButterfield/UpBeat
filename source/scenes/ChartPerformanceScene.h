@@ -10,8 +10,8 @@
 class ChartPerformanceScene : public Scene
 {
 public:
-    ChartPerformanceScene();
-    ~ChartPerformanceScene();
+    ChartPerformanceScene(GameState* gs);
+    ~ChartPerformanceScene() override;
 private:
     void update() override;
     void paint(juce::Graphics& g) override;

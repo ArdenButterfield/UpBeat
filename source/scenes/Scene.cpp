@@ -3,7 +3,7 @@
 //
 
 #include "Scene.h"
-Scene::Scene()
+Scene::Scene(GameState* gs) : gameState (gs)
 {
     setFramesPerSecond (60);
 }

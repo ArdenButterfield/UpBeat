@@ -3,8 +3,9 @@
 //
 
 #include "TitleScene.h"
-TitleScene::TitleScene()
+TitleScene::TitleScene(GameState* gs) : Scene(gs)
 {
+    sceneID = SceneIDs::TITLE_SCENE;
 }
 TitleScene::~TitleScene()
 {
@@ -16,9 +17,8 @@ void TitleScene::paint (juce::Graphics& g)
     g.setColour (juce::Colours::white);
     g.setFont (24);
     g.drawText ("UpBeat", getLocalBounds(), juce::Justification::centred, 1);
-
-    sceneID = SceneIDs::TITLE_SCENE;
 }
+
 void TitleScene::update()
 {
 }

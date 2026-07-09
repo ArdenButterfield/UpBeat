@@ -27,6 +27,7 @@ TEST_CASE ("Bundled Resources")
     for (auto& entry : BundledResources::listEntries ("default_charts"))
     {
         i += 1;
+        DBG(entry);
     }
 
     REQUIRE (i > 1);

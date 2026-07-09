@@ -7,9 +7,10 @@
 #include "BundledResources.h"
 #include "scenes/ChartSelectionScene.h"
 #include "scenes/TitleScene.h"
-#include <iostream>
-SceneLoader::SceneLoader ()
+
+SceneLoader::SceneLoader (GameState* gs)
 {
+    gameState = gs;
     prepared = false;
 
     loadInitialScene();
@@ -51,7 +52,7 @@ void SceneLoader::releaseResources()
 
 void SceneLoader::loadInitialScene()
 {
-    currentScene = std::make_unique<TitleScene>();
+    currentScene = std::make_unique<TitleScene>(gameState);
     loadScene();
 }
 
@@ -80,10 +81,10 @@ void SceneLoader::timerCallback()
             case SceneIDs::NO_SCENE:
                 currentScene = nullptr;
             case SceneIDs::TITLE_SCENE:
-                currentScene = std::make_unique<TitleScene>();
+                currentScene = std::make_unique<TitleScene>(gameState);
                 break;
             case SceneIDs::CHART_SELECT_SCENE:
-                currentScene = std::make_unique<ChartSelectionScene>();
+                currentScene = std::make_unique<ChartSelectionScene>(gameState);
                 break;
             default:;
         }

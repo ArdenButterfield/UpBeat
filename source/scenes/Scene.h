@@ -5,6 +5,7 @@
 #ifndef UPBEAT_SCENE_H
 #define UPBEAT_SCENE_H
 
+#include "../GameState.h"
 #include "SceneIds.h"
 #include "juce_audio_basics/juce_audio_basics.h"
 #include "juce_gui_basics/juce_gui_basics.h"
@@ -13,7 +14,7 @@
 class Scene : public juce::AnimatedAppComponent
 {
 public:
-    Scene();
+    Scene(GameState* gs);
     ~Scene() override;
     void prepareToPlay(double sampleRate, int samplesPerBlock) ;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) ;
@@ -24,6 +25,8 @@ public:
 
     virtual SceneIDs::SceneID getSceneID() const;
     virtual SceneIDs::SceneID getDesiredSceneID();
+protected:
+    GameState* gameState;
 };
 
 #endif //UPBEAT_SCENE_H

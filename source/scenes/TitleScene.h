@@ -9,8 +9,8 @@
 class TitleScene : public Scene
 {
 public:
-    TitleScene();
-    ~TitleScene();
+    TitleScene(GameState* gs);
+    ~TitleScene() override;
     void paint(juce::Graphics& g) override;
     void update() override;
     SceneIDs::SceneID getSceneID() const override;

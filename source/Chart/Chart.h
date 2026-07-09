@@ -13,7 +13,6 @@ public:
     Chart(const juce::MemoryBlock& midiData);
     ~Chart();
     juce::String name;
-private:
     juce::MemoryBlock midiData;
     std::vector<ChartEvent> events;
 };

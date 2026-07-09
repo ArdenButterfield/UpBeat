@@ -10,6 +10,7 @@ struct GameState
 {
     std::vector<Chart> charts;
     Chart* currentChart;
+    static const int numberOfInputLanes = 4;
 };
 
 #endif //UPBEAT_GAMESTATE_H

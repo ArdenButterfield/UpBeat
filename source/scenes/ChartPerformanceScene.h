@@ -6,15 +6,28 @@
 #define UPBEAT_CHARTPERFORMANCESCENE_H
 
 #include "Scene.h"
+#include "juce_gui_basics/juce_gui_basics.h"
 
-class ChartPerformanceScene : public Scene
+class ChartPerformanceScene : public Scene, public juce::Button::Listener
 {
 public:
     ChartPerformanceScene(GameState* gs);
     ~ChartPerformanceScene() override;
 private:
+    juce::TextButton startButton;
+
+    void buttonClicked(juce::Button*) override;
     void update() override;
     void paint(juce::Graphics& g) override;
+    void resized() override;
+
+    bool playing;
+    int timeMs;
+
+    const float pixelsPerMillisecond = 0.2;
+
+    juce::Rectangle<int> laneOutline;
+    std::array<juce::Rectangle<int>, GameState::numberOfInputLanes> lanes;
 };
 
 #endif //UPBEAT_CHARTPERFORMANCESCENE_H

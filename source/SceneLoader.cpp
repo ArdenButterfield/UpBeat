@@ -5,6 +5,7 @@
 #include "SceneLoader.h"
 
 #include "BundledResources.h"
+#include "scenes/ChartPerformanceScene.h"
 #include "scenes/ChartSelectionScene.h"
 #include "scenes/TitleScene.h"
 
@@ -85,6 +86,9 @@ void SceneLoader::timerCallback()
                 break;
             case SceneIDs::CHART_SELECT_SCENE:
                 currentScene = std::make_unique<ChartSelectionScene>(gameState);
+                break;
+            case SceneIDs::CHART_PERFORMANCE_SCENE:
+                currentScene = std::make_unique<ChartPerformanceScene>(gameState);
                 break;
             default:;
         }

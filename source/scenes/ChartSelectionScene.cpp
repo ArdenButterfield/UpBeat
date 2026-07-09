@@ -16,6 +16,7 @@ ChartSelectionScene::ChartSelectionScene(GameState* gs) : Scene(gs), desiredScen
     for (auto& button : chartSelectionButtons)
     {
         addAndMakeVisible (button.get());
+        button->addListener (this);
     }
 
 }
@@ -45,6 +46,7 @@ void ChartSelectionScene::buttonClicked (juce::Button* b)
         if (button.get() == b)
         {
             gameState->currentChart = &gameState->charts[i];
+            desiredSceneId = SceneIDs::CHART_PERFORMANCE_SCENE;
             return;
         }
     }
@@ -54,7 +56,6 @@ void ChartSelectionScene::resized()
     for (int i = 0; i < chartSelectionButtons.size(); ++i)
     {
         chartSelectionButtons[i]->setBounds (getLocalBounds().withTrimmedLeft (10).withTrimmedRight (10).withHeight (70).withY (i * 90 + 20));
-        desiredSceneId = SceneIDs::CHART_PERFORMANCE_SCENE;
     }
 }
 SceneIDs::SceneID ChartSelectionScene::getDesiredSceneID()

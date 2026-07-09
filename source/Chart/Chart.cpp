@@ -3,6 +3,7 @@
 //
 
 #include "Chart.h"
+#include "../GameState.h"
 
 #include "juce_audio_basics/juce_audio_basics.h"
 
@@ -27,7 +28,16 @@ Chart::Chart (const juce::MemoryBlock& _midiData) : midiData (_midiData)
         for (int i = 0; i < activeTrack->getNumEvents(); ++i)
         {
             auto event = activeTrack->getEventPointer (i);
-            std::cout << event->message.getDescription() << std::endl;
+
+            if (event->message.isNoteOn ())
+            {
+                events.push_back (ChartEvent());
+                events.back().midiNote = event->message.getNoteNumber();
+                events.back().lengthMs = event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000;
+                events.back().timeMs = event->message.getTimeStamp() * 1000;
+                events.back().inputButton = (event->message.getNoteNumber() % GameState::numberOfInputLanes) + 1;
+                events.back().type = ChartEvent::NOTE;
+            }
         }
     }
 

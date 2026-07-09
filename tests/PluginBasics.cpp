@@ -1,5 +1,7 @@
 #include "helpers/test_helpers.h"
 #include <PluginProcessor.h>
+#include <BundledResources.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -17,6 +19,21 @@ TEST_CASE ("Plugin instance", "[instance]")
         CHECK_THAT (testPlugin.getName().toStdString(),
             Catch::Matchers::Equals ("UpBeat"));
     }
+}
+
+TEST_CASE ("Bundled Resources")
+{
+    int i = 0;
+    for (auto& entry : BundledResources::listEntries ("default_charts"))
+    {
+        i += 1;
+    }
+
+    REQUIRE (i > 1);
+
+    auto helloMid = BundledResources::loadFile ("default_charts/midi/hello.mid");
+    REQUIRE (helloMid.getSize() > 0);
+    REQUIRE (juce::String::toHexString (helloMid.getData(), (int) helloMid.getSize()).length() > 0);
 }
 
 

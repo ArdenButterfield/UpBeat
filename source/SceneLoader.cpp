@@ -14,15 +14,6 @@ SceneLoader::SceneLoader ()
 
     loadInitialScene();
     startTimerHz (60);
-
-    std::cout << "BundledResources/default_charts contents:\n";
-    for (auto& entry : BundledResources::listEntries ("default_charts"))
-        std::cout << "  " << entry << "\n";
-
-    auto helloMid = BundledResources::loadFile ("default_charts/midi/hello.mid");
-    std::cout << "BundledResources/default_charts/midi/hello.mid ("
-               << helloMid.getSize() << " bytes):\n"
-               << juce::String::toHexString (helloMid.getData(), (int) helloMid.getSize()) << "\n";
 }
 
 

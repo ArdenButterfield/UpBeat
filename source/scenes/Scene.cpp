@@ -5,6 +5,7 @@
 #include "Scene.h"
 Scene::Scene()
 {
+    setFramesPerSecond (60);
 }
 Scene::~Scene()
 {

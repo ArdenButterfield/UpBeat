@@ -19,6 +19,9 @@ void TitleScene::paint (juce::Graphics& g)
 
     sceneID = SceneIDs::TITLE_SCENE;
 }
+void TitleScene::update()
+{
+}
 SceneIDs::SceneID TitleScene::getSceneID() const
 {
     return SceneIDs::TITLE_SCENE;

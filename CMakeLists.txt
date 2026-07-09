@@ -118,6 +118,37 @@ target_sources(SharedCode INTERFACE ${SourceFiles})
 # Adds a BinaryData target for embedding assets into the binary
 include(Assets)
 
+# BinaryData flattens every embedded file into one namespace, discarding folder structure
+# and colliding same-named files from different folders (e.g. default_charts/midi/hello.mid
+# vs default_charts/musicxml/hello.mxl). To preserve BundledResources/'s directory structure,
+# zip it at build time and embed that single zip as its own BinaryData target; at runtime,
+# source/BundledResources.h opens it with juce::ZipFile and looks entries up by relative path.
+set(BundledResourcesSourceDir "${CMAKE_CURRENT_SOURCE_DIR}/BundledResources")
+set(BundledResourcesZip "${CMAKE_CURRENT_BINARY_DIR}/generated/BundledResources.zip")
+
+file(GLOB_RECURSE BundledResourceFiles CONFIGURE_DEPENDS "${BundledResourcesSourceDir}/*")
+
+set(BundledResourceRelativeFiles)
+foreach(file IN LISTS BundledResourceFiles)
+    file(RELATIVE_PATH relativeFile "${BundledResourcesSourceDir}" "${file}")
+    list(APPEND BundledResourceRelativeFiles "${relativeFile}")
+endforeach()
+
+add_custom_command(
+    OUTPUT "${BundledResourcesZip}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    COMMAND ${CMAKE_COMMAND} -E tar cf "${BundledResourcesZip}" --format=zip -- ${BundledResourceRelativeFiles}
+    WORKING_DIRECTORY "${BundledResourcesSourceDir}"
+    DEPENDS ${BundledResourceFiles}
+    COMMENT "Zipping BundledResources for BinaryData embedding"
+    VERBATIM)
+
+juce_add_binary_data(BundledResourcesAssets
+    NAMESPACE BundledResourcesBinaryData
+    HEADER_NAME BundledResourcesBinaryData.h
+    SOURCES "${BundledResourcesZip}")
+set_target_properties(BundledResourcesAssets PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+
 # MacOS only: Cleans up folder and target organization on Xcode.
 include(XcodePrettify)
 
@@ -149,6 +180,7 @@ target_compile_definitions(SharedCode
 target_link_libraries(SharedCode
     INTERFACE
     Assets
+    BundledResourcesAssets
     melatonin_inspector
     juce_audio_utils
     juce_audio_processors

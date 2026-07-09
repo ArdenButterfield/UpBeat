@@ -26,6 +26,10 @@ private:
     void timerCallback() override;
 
     juce::CriticalSection sceneTransitionCriticalSection;
+
+    double sampleRate;
+    int samplesPerBlock;
+    bool prepared = false;
 };
 
 #endif //UPBEAT_SCENELOADER_H

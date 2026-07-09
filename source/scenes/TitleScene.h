@@ -12,6 +12,7 @@ public:
     TitleScene();
     ~TitleScene();
     void paint(juce::Graphics& g) override;
+    void update() override;
     SceneIDs::SceneID getSceneID() const override;
     SceneIDs::SceneID getDesiredSceneID() override;
     void mouseUp(const juce::MouseEvent& event) override;

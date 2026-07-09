@@ -10,6 +10,9 @@ ChartSelectionScene::ChartSelectionScene()
 ChartSelectionScene::~ChartSelectionScene()
 {
 }
+void ChartSelectionScene::update()
+{
+}
 void ChartSelectionScene::paint (juce::Graphics& g)
 {
     g.fillAll(juce::Colours::black);

@@ -12,6 +12,7 @@ class ChartSelectionScene : public Scene
 public:
     ChartSelectionScene();
     ~ChartSelectionScene();
+    void update() override;
     void paint(juce::Graphics& g) override;
 
 };

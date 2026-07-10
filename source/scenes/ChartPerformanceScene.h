@@ -21,6 +21,7 @@ private:
     void paint(juce::Graphics& g) override;
     void resized() override;
 
+    bool keyPressed(const juce::KeyPress& key) override;
     bool playing;
     int timeMs;
 
@@ -28,6 +29,9 @@ private:
 
     juce::Rectangle<int> laneOutline;
     std::array<juce::Rectangle<int>, GameState::numberOfInputLanes> lanes;
+    std::array<juce::Rectangle<int>, GameState::numberOfInputLanes> buttonIndicators;
+    std::array<float, GameState::numberOfInputLanes> indicatorLighting;
+    std::array<int, GameState::numberOfInputLanes> keys = {65, 83, 68, 70};
 };
 
 #endif //UPBEAT_CHARTPERFORMANCESCENE_H

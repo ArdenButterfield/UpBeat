@@ -10,7 +10,10 @@ struct GameState
 {
     std::vector<Chart> charts;
     Chart* currentChart;
-    static const int numberOfInputLanes = 4;
+    static constexpr int numberOfInputLanes = 4;
+    static constexpr int NUM_TOLERANCE_CATEGORIES = 4;
+    std::array<long, NUM_TOLERANCE_CATEGORIES> tolerances {100, 200, 400, 800};
+    std::array<std::string, NUM_TOLERANCE_CATEGORIES> toleranceLabels {"Perfect", "Great", "Good", "Ok"};
 };
 
 #endif //UPBEAT_GAMESTATE_H

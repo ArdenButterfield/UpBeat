@@ -4,10 +4,20 @@
 
 #ifndef UPBEAT_CHARTEVENT_H
 #define UPBEAT_CHARTEVENT_H
+#include "Chart.h"
+#include "juce_audio_basics/juce_audio_basics.h"
 #include <vector>
 
 struct ChartEvent
 {
+    ChartEvent(const juce::MidiMessageSequence::MidiEventHolder* event, int numInputLanes)
+    {
+        midiNote = event->message.getNoteNumber();
+        lengthMs = static_cast<long>(event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000);
+        timeMs = static_cast<long>(event->message.getTimeStamp() * 1000);
+        inputButton = (event->message.getNoteNumber() % numInputLanes) + 1;
+        type = NOTE;
+    }
     enum eventType
     {
         NULL_EVENT = 0,
@@ -16,11 +26,11 @@ struct ChartEvent
         NOTE
     };
 
-    int timeMs;
+    long timeMs;
     eventType type;
-    int lengthMs;
-    char midiNote;
-    char inputButton;
+    long lengthMs;
+    int midiNote;
+    int inputButton;
     std::vector<int> performanceTimings;
 };
 

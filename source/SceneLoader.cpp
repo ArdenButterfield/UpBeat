@@ -27,7 +27,7 @@ void SceneLoader::prepareToPlay (double _sampleRate, int _samplesPerBlock)
 {
     sampleRate = _sampleRate;
     samplesPerBlock = _samplesPerBlock;
-
+    prepared = true;
     if (currentScene != nullptr)
     {
         currentScene->prepareToPlay (sampleRate, samplesPerBlock);
@@ -48,6 +48,13 @@ void SceneLoader::releaseResources()
     if (currentScene != nullptr)
     {
         currentScene->releaseResources();
+    }
+}
+void SceneLoader::resized()
+{
+    if (currentScene != nullptr)
+    {
+        currentScene->setBounds (getLocalBounds());
     }
 }
 
@@ -92,6 +99,6 @@ void SceneLoader::timerCallback()
                 break;
             default:;
         }
+        loadScene();
     }
-    loadScene();
 }

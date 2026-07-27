@@ -15,6 +15,37 @@ ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startBu
 ChartPerformanceScene::~ChartPerformanceScene()
 {
 }
+void ChartPerformanceScene::prepareToPlay (double sampleRate, int samplesPerBlock)
+{
+    std::cout << "prepare scene," << sampleRate << std::endl;
+    juce::ignoreUnused (samplesPerBlock);
+    synth.prepareToPlay (sampleRate);
+}
+
+void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer, juce::MidiBuffer& midi_message_metadatas)
+{
+    auto lock = juce::ScopedTryLock(playbackLock);
+    if (lock.isLocked())
+    {
+        while (!playbackQueue.empty())
+        {
+            auto e = playbackQueue.back();
+            playbackQueue.pop();
+            auto midiNote = e->midiNote;
+            synth.noteOn (midiNote);
+        }
+    }
+
+    synth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+}
+SceneIDs::SceneID ChartPerformanceScene::getDesiredSceneID()
+{
+    return SceneIDs::CHART_PERFORMANCE_SCENE;
+}
+SceneIDs::SceneID ChartPerformanceScene::getSceneID() const
+{
+    return SceneIDs::CHART_PERFORMANCE_SCENE;
+}
 
 void ChartPerformanceScene::buttonClicked (juce::Button* b)
 {
@@ -23,7 +54,8 @@ void ChartPerformanceScene::buttonClicked (juce::Button* b)
         startButton.setVisible (false);
         playing = true;
         timeMs = -2000;
-            grabKeyboardFocus();
+        gameStartTime = juce::Time::currentTimeMillis() + 2000;
+        grabKeyboardFocus();
     }
 }
 void ChartPerformanceScene::update()
@@ -52,7 +84,6 @@ void ChartPerformanceScene::update()
 
 void ChartPerformanceScene::paint (juce::Graphics& g)
 {
-
     g.fillAll(juce::Colours::darkgrey);
     g.setColour (juce::Colours::lightgrey);
     g.drawRect (laneOutline);
@@ -67,14 +98,13 @@ void ChartPerformanceScene::paint (juce::Graphics& g)
         g.fillRect (buttonIndicators[i]);
     }
 
-
     g.setColour (juce::Colours::pink);
     for (auto& event : gameState->currentChart->events)
     {
-        if (event.type == ChartEvent::NOTE)
+        if (event.second.type == ChartEvent::NOTE)
         {
-            auto notePosition = static_cast<int>((timeMs - event.timeMs) * pixelsPerMillisecond) + lanes[0].getBottom();
-            g.drawRect (lanes[event.inputButton - 1].withY (notePosition - 3).withHeight (6));
+            auto notePosition = static_cast<int>((timeMs - event.first) * pixelsPerMillisecond) + lanes[0].getBottom();
+            g.drawRect (lanes[event.second.inputButton - 1].withY (notePosition - 3).withHeight (6));
         }
     }
 }
@@ -93,15 +123,40 @@ void ChartPerformanceScene::resized()
         buttonIndicators[i] = indicatorsInner.withWidth (laneW).withX(lanesInner.getX() + i * laneW);
     }
 }
+
 bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
 {
+    auto hitTime = static_cast<long>(juce::Time::currentTimeMillis() - gameStartTime);
     for (int i = 0; i < GameState::numberOfInputLanes; ++i)
     {
         if (keys[i] == key.getKeyCode())
         {
-            // handle kepress
             indicatorLighting[i] = 1;
+            auto closestEvent = findClosestNoteForHit (i, hitTime);
+            if (closestEvent != nullptr)
+            {
+                auto scopedLock = juce::ScopedLock (playbackLock);
+                playbackQueue.push (closestEvent);
+            }
         }
     }
     return true;
+}
+
+ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long time) const
+{
+    auto totalHitWindow = gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES-1];
+    auto closeness = totalHitWindow+1;
+    ChartEvent* closestNote = nullptr;
+    for (auto it = gameState->currentChart->events.lower_bound (timeMs - totalHitWindow);
+        it != gameState->currentChart->events.end() && it->first < timeMs + totalHitWindow;
+        ++it)
+    {
+        if (it->second.type == ChartEvent::NOTE && it->second.inputButton == lane && abs(it->first - time) < closeness)
+        {
+            closeness = abs(it->first - time);
+            closestNote = &(it->second);
+        }
+    }
+    return closestNote;
 }

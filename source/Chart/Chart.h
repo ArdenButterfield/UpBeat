@@ -6,15 +6,16 @@
 #define UPBEAT_CHART_H
 #include "ChartEvent.h"
 #include "juce_core/juce_core.h"
+#include <map>
 
 class Chart
 {
 public:
-    Chart(const juce::MemoryBlock& midiData);
+    explicit Chart(const juce::MemoryBlock& midiData);
     ~Chart();
     juce::String name;
     juce::MemoryBlock midiData;
-    std::vector<ChartEvent> events;
+    std::multimap<long, ChartEvent> events;
 };
 
 #endif //UPBEAT_CHART_H

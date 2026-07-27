@@ -5,6 +5,7 @@
 #ifndef UPBEAT_CHARTPERFORMANCESCENE_H
 #define UPBEAT_CHARTPERFORMANCESCENE_H
 
+#include "../Audio/SquareWaveSynth.h"
 #include "Scene.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
@@ -13,8 +14,15 @@ class ChartPerformanceScene : public Scene, public juce::Button::Listener
 public:
     ChartPerformanceScene(GameState* gs);
     ~ChartPerformanceScene() override;
+
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    SceneIDs::SceneID getDesiredSceneID() override;
+    SceneIDs::SceneID getSceneID() const override;
 private:
     juce::TextButton startButton;
+
+    SquareWaveSynth synth;
 
     void buttonClicked(juce::Button*) override;
     void update() override;
@@ -32,6 +40,13 @@ private:
     std::array<juce::Rectangle<int>, GameState::numberOfInputLanes> buttonIndicators;
     std::array<float, GameState::numberOfInputLanes> indicatorLighting;
     std::array<int, GameState::numberOfInputLanes> keys = {65, 83, 68, 70};
+
+    std::queue<ChartEvent*> playbackQueue;
+    juce::CriticalSection playbackLock;
+
+    long long gameStartTime;
+
+    ChartEvent* findClosestNoteForHit(int lane, long time) const;
 };
 
 #endif //UPBEAT_CHARTPERFORMANCESCENE_H

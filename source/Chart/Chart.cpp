@@ -31,12 +31,8 @@ Chart::Chart (const juce::MemoryBlock& _midiData) : midiData (_midiData)
 
             if (event->message.isNoteOn ())
             {
-                events.push_back (ChartEvent());
-                events.back().midiNote = event->message.getNoteNumber();
-                events.back().lengthMs = event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000;
-                events.back().timeMs = event->message.getTimeStamp() * 1000;
-                events.back().inputButton = (event->message.getNoteNumber() % GameState::numberOfInputLanes) + 1;
-                events.back().type = ChartEvent::NOTE;
+                auto chartEvent = ChartEvent(event, GameState::numberOfInputLanes);
+                events.insert ({chartEvent.timeMs, std::move(chartEvent)});
             }
         }
     }

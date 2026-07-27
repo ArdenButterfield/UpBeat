@@ -20,6 +20,7 @@ public:
     void prepareToPlay(double sampleRate, int samplesPerBlock);
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&);
     void releaseResources();
+    void resized() override;
 private:
     void loadInitialScene();
     void loadScene();

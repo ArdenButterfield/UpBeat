@@ -16,8 +16,8 @@ class Scene : public juce::AnimatedAppComponent
 public:
     Scene(GameState* gs);
     ~Scene() override;
-    void prepareToPlay(double sampleRate, int samplesPerBlock) ;
-    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) ;
+    virtual void prepareToPlay(double sampleRate, int samplesPerBlock);
+    virtual void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&);
     void releaseResources();
 
     void paint(juce::Graphics& g) override;

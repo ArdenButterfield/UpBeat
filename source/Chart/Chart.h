@@ -16,6 +16,8 @@ public:
     juce::String name;
     juce::MemoryBlock midiData;
     std::multimap<long, ChartEvent> events;
+
+    long countInTime = 2000;
 };
 
 #endif //UPBEAT_CHART_H

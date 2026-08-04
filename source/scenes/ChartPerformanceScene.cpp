@@ -4,22 +4,26 @@
 
 #include "ChartPerformanceScene.h"
 
+#include <corecrt_io.h>
+
 ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playing(false)
 {
     addAndMakeVisible (startButton);
     startButton.addListener (this);
     indicatorLighting.fill(0);
     setWantsKeyboardFocus (true);
+    elapsedSamples = 0;
 }
 
 ChartPerformanceScene::~ChartPerformanceScene()
 {
 }
-void ChartPerformanceScene::prepareToPlay (double sampleRate, int samplesPerBlock)
+void ChartPerformanceScene::prepareToPlay (double _sampleRate, int samplesPerBlock)
 {
-    std::cout << "prepare scene," << sampleRate << std::endl;
+    sampleRate = _sampleRate;
     juce::ignoreUnused (samplesPerBlock);
     synth.prepareToPlay (sampleRate);
+    backgroundSynth.prepareToPlay (sampleRate);
 }
 
 void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer, juce::MidiBuffer& midi_message_metadatas)
@@ -32,11 +36,32 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
             auto e = playbackQueue.back();
             playbackQueue.pop();
             auto midiNote = e->midiNote;
+            std::cout << "starting synth with pitch " << midiNote << std::endl;
             synth.noteOn (midiNote);
         }
     }
 
+    if (playing)
+    {
+        auto bufferStartTime = static_cast<long>((elapsedSamples * 1000 / sampleRate) - gameState->currentChart->countInTime);
+        auto bufferEndTime = static_cast<long>(((elapsedSamples + audio_buffer.getNumSamples()) * 1000 / sampleRate) - gameState->currentChart->countInTime);
+
+        for (auto event = gameState->currentChart->events.lower_bound (bufferStartTime); event != gameState->currentChart->events.end() && event->first < bufferEndTime; ++event)
+        {
+            if (event->second.type == ChartEvent::NOTE)
+            {
+                backgroundSynth.noteOn (event->second.midiNote);
+            }
+        }
+        elapsedSamples += audio_buffer.getNumSamples();
+    } else
+    {
+        elapsedSamples = 0;
+    }
+
     synth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+    backgroundSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+
 }
 SceneIDs::SceneID ChartPerformanceScene::getDesiredSceneID()
 {
@@ -51,13 +76,26 @@ void ChartPerformanceScene::buttonClicked (juce::Button* b)
 {
     if (b == &startButton)
     {
-        startButton.setVisible (false);
-        playing = true;
-        timeMs = -2000;
-        gameStartTime = juce::Time::currentTimeMillis() + 2000;
-        grabKeyboardFocus();
+        startGame();
     }
 }
+
+void ChartPerformanceScene::startGame()
+{
+    startButton.setVisible (false);
+    playing = true;
+    timeMs = -gameState->currentChart->countInTime;
+    gameStartTime = juce::Time::currentTimeMillis() + gameState->currentChart->countInTime;
+    grabKeyboardFocus();
+    playbackIterator = gameState->currentChart->events.lower_bound (timeMs);
+
+    for (auto& event : gameState->currentChart->events)
+    {
+        if (event.second.type == ChartEvent::NOTE)
+        event.second.performanceTimings.emplace_back(UNPLAYED_NOTE);
+    }
+}
+
 void ChartPerformanceScene::update()
 {
     if (playing)
@@ -131,11 +169,13 @@ bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
     {
         if (keys[i] == key.getKeyCode())
         {
+            std::cout << "key" << i << " pressed at " << hitTime << std::endl;
             indicatorLighting[i] = 1;
             auto closestEvent = findClosestNoteForHit (i, hitTime);
             if (closestEvent != nullptr)
             {
-                auto scopedLock = juce::ScopedLock (playbackLock);
+                std::cout << "event found at time " << closestEvent->timeMs << " pitch " << closestEvent->midiNote << std::endl;
+                auto scopedLock = juce::ScopedLock (playbackLock);  
                 playbackQueue.push (closestEvent);
             }
         }

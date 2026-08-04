@@ -6,6 +6,8 @@
 #define UPBEAT_GAMESTATE_H
 #include "Chart/Chart.h"
 
+#define UNPLAYED_NOTE (-99999)
+
 struct GameState
 {
     std::vector<Chart> charts;

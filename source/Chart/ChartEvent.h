@@ -23,7 +23,8 @@ struct ChartEvent
         NULL_EVENT = 0,
         BARLINE,
         BEATLINE,
-        NOTE
+        NOTE,
+        BACKGROUND_NOTE
     };
 
     long timeMs;

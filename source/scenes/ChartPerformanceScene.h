@@ -35,9 +35,9 @@ private:
     void startGame();
     bool keyPressed(const juce::KeyPress& key) override;
     bool playing;
-    long timeMs;
-    long elapsedSamples;
-    float pixelsPerMillisecond = 0.2;
+    long long timeMs;
+    long long elapsedSamples;
+    double pixelsPerMillisecond = 0.2;
 
     juce::Rectangle<int> laneOutline;
     std::array<juce::Rectangle<int>, GameState::numberOfInputLanes> lanes;
@@ -51,9 +51,9 @@ private:
 
     long long gameStartTime;
 
-    ChartEvent* findClosestNoteForHit(int lane, long time) const;
+    ChartEvent* findClosestNoteForHit(int lane, long long time) const;
 
-    std::multimap<long, ChartEvent>::iterator playbackIterator;
+    std::multimap<long long, ChartEvent>::iterator playbackIterator;
 
     double sampleRate;
 };

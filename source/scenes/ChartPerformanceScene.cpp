@@ -41,13 +41,14 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
 
     if (playing)
     {
-        auto bufferStartTime = static_cast<long>((elapsedSamples * 1000 / sampleRate) - gameState->currentChart->countInTime);
-        auto bufferEndTime = static_cast<long>(((elapsedSamples + audio_buffer.getNumSamples()) * 1000 / sampleRate) - gameState->currentChart->countInTime);
+        auto bufferStartTime = elapsedSamples * 1000 / static_cast<long long>(sampleRate) - gameState->currentChart->countInTime;
+        auto bufferEndTime = (elapsedSamples + audio_buffer.getNumSamples()) * 1000 / static_cast<long long>(sampleRate) - gameState->currentChart->countInTime;
 
         for (auto event = gameState->currentChart->events.lower_bound (bufferStartTime); event != gameState->currentChart->events.end() && event->first < bufferEndTime; ++event)
         {
             if (event->second.type == ChartEvent::NOTE)
             {
+                std::cout << "background note at note " << event->second.midiNote << "time " << bufferStartTime << std::endl;
                 backgroundSynth.noteOn (event->second.midiNote);
             } else if (event->second.type == ChartEvent::BARLINE)
             {
@@ -147,10 +148,15 @@ void ChartPerformanceScene::paint (juce::Graphics& g)
     {
         auto eventYPosition = static_cast<long>((timeMs - event.first) * pixelsPerMillisecond) + lanes[0].getBottom();
 
+        if (eventYPosition > lanes[0].getBottom() || eventYPosition < lanes[0].getY())
+        {
+            continue;
+        }
+
         if (event.second.type == ChartEvent::NOTE)
         {
             g.setColour (juce::Colours::pink);
-            g.drawRect (lanes[event.second.inputButton].withY (eventYPosition - 3).withHeight (6));
+            g.drawRect (lanes[event.second.inputButton].withY (eventYPosition - 3L).withHeight (6));
         } else if (event.second.type == ChartEvent::BEAT)
         {
             g.setColour(juce::Colours::grey);
@@ -180,11 +186,12 @@ void ChartPerformanceScene::resized()
 
 bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
 {
-    auto hitTime = static_cast<long>(juce::Time::currentTimeMillis() - gameStartTime);
+    auto hitTime = juce::Time::currentTimeMillis() - gameStartTime;
     for (int i = 0; i < GameState::numberOfInputLanes; ++i)
     {
         if (keys[i] == key.getKeyCode())
         {
+            std::cout << "hit at time " << hitTime << " lane " << i << std::endl;
             indicatorLighting[i] = 1;
             auto closestEvent = findClosestNoteForHit (i, hitTime);
             if (closestEvent != nullptr)
@@ -198,8 +205,9 @@ bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
     return true;
 }
 
-ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long time) const
+ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long long time) const
 {
+    std::cout << "searching at lane " << lane << ", time " << time << std::endl;
     auto totalHitWindow = gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES-1];
     auto closeness = totalHitWindow+1;
     ChartEvent* closestNote = nullptr;
@@ -210,11 +218,12 @@ ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long time) c
         if (it->second.type == ChartEvent::NOTE
             && it->second.inputButton == lane
             && abs(it->first - time) < closeness
-            && it->second.performanceTimings.back() != UNPLAYED_NOTE)
+            && it->second.performanceTimings.back() == UNPLAYED_NOTE)
         {
             closeness = abs(it->first - time);
             closestNote = &(it->second);
         }
     }
+    std::cout << *gameState->getMessage (closeness) << std::endl;
     return closestNote;
 }

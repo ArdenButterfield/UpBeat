@@ -22,22 +22,22 @@ struct ChartEvent
     ChartEvent(const juce::MidiMessageSequence::MidiEventHolder* event, int numInputLanes)
     {
         midiNote = event->message.getNoteNumber();
-        lengthMs = static_cast<long>(event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000);
-        timeMs = static_cast<long>(event->message.getTimeStamp() * 1000);
+        lengthMs = static_cast<long long>(event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000);
+        timeMs = static_cast<long long>(event->message.getTimeStamp() * 1000);
         inputButton = (event->message.getNoteNumber() % numInputLanes);
         type = NOTE;
     }
 
-    ChartEvent(long timeMs, eventType type) : timeMs (timeMs), type (type), lengthMs (0), midiNote (0), inputButton (-1)
+    ChartEvent(long long timeMs, eventType type) : timeMs (timeMs), type (type), lengthMs (0), midiNote (0), inputButton (-1)
     {
     }
 
-    long timeMs;
+    long long timeMs;
     eventType type;
-    long lengthMs;
+    long long lengthMs;
     int midiNote;
     int inputButton;
-    std::vector<int> performanceTimings;
+    std::vector<long long> performanceTimings;
 };
 
 #endif //UPBEAT_CHARTEVENT_H

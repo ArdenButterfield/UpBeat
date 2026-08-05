@@ -34,6 +34,7 @@ Chart::Chart (const juce::MemoryBlock& _midiData) : midiData (_midiData)
             if (event->message.isNoteOn ())
             {
                 auto chartEvent = ChartEvent(event, GameState::numberOfInputLanes);
+                std::cout << "create event at " << chartEvent.timeMs << ", button " << chartEvent.inputButton << std::endl;
                 events.insert ({chartEvent.timeMs, std::move(chartEvent)});
             }
         }
@@ -81,7 +82,7 @@ Chart::Chart (const juce::MemoryBlock& _midiData) : midiData (_midiData)
                 beatInBar = 0;
 
             auto type = (beatInBar == 0) ? ChartEvent::BARLINE : ChartEvent::BEAT;
-            auto chartEvent = ChartEvent (static_cast<long> (t * 1000.0), type);
+            auto chartEvent = ChartEvent (static_cast<long long> (t * 1000.0), type);
             events.insert ({ chartEvent.timeMs, std::move (chartEvent) });
 
             beatInBar = (beatInBar + 1) % timeSigNumerator;

@@ -135,13 +135,22 @@ void ChartPerformanceScene::paint (juce::Graphics& g)
         g.fillRect (buttonIndicators[i]);
     }
 
-    g.setColour (juce::Colours::pink);
     for (auto& event : gameState->currentChart->events)
     {
+        auto eventYPosition = static_cast<long>((timeMs - event.first) * pixelsPerMillisecond) + lanes[0].getBottom();
+
         if (event.second.type == ChartEvent::NOTE)
         {
-            auto notePosition = static_cast<long>((timeMs - event.first) * pixelsPerMillisecond) + lanes[0].getBottom();
-            g.drawRect (lanes[event.second.inputButton].withY (notePosition - 3).withHeight (6));
+            g.setColour (juce::Colours::pink);
+            g.drawRect (lanes[event.second.inputButton].withY (eventYPosition - 3).withHeight (6));
+        } else if (event.second.type == ChartEvent::BEATLINE)
+        {
+            g.setColour(juce::Colours::grey);
+            g.drawHorizontalLine (eventYPosition, lanes[0].getX(), lanes.back().getRight());
+        } else if (event.second.type == ChartEvent::BARLINE)
+        {
+            g.setColour (juce::Colours::white);
+            g.drawHorizontalLine (eventYPosition, lanes[0].getX(), lanes.back().getRight());
         }
     }
 }

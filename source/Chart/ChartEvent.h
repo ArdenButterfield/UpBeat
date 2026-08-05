@@ -10,14 +10,6 @@
 
 struct ChartEvent
 {
-    ChartEvent(const juce::MidiMessageSequence::MidiEventHolder* event, int numInputLanes)
-    {
-        midiNote = event->message.getNoteNumber();
-        lengthMs = static_cast<long>(event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000);
-        timeMs = static_cast<long>(event->message.getTimeStamp() * 1000);
-        inputButton = (event->message.getNoteNumber() % numInputLanes);
-        type = NOTE;
-    }
     enum eventType
     {
         NULL_EVENT = 0,
@@ -26,6 +18,19 @@ struct ChartEvent
         NOTE,
         BACKGROUND_NOTE
     };
+
+    ChartEvent(const juce::MidiMessageSequence::MidiEventHolder* event, int numInputLanes)
+    {
+        midiNote = event->message.getNoteNumber();
+        lengthMs = static_cast<long>(event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000);
+        timeMs = static_cast<long>(event->message.getTimeStamp() * 1000);
+        inputButton = (event->message.getNoteNumber() % numInputLanes);
+        type = NOTE;
+    }
+
+    ChartEvent(long timeMs, eventType type) : timeMs (timeMs), type (type), lengthMs (0), midiNote (0), inputButton (-1)
+    {
+    }
 
     long timeMs;
     eventType type;

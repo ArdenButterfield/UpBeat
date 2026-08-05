@@ -4,8 +4,6 @@
 
 #include "ChartPerformanceScene.h"
 
-#include <corecrt_io.h>
-
 ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playing(false)
 {
     addAndMakeVisible (startButton);
@@ -51,6 +49,7 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
             if (event->second.type == ChartEvent::NOTE)
             {
                 backgroundSynth.noteOn (event->second.midiNote);
+                std::cout<< "background note at time " << bufferStartTime << std::endl;
             }
         }
         elapsedSamples += audio_buffer.getNumSamples();
@@ -92,7 +91,9 @@ void ChartPerformanceScene::startGame()
     for (auto& event : gameState->currentChart->events)
     {
         if (event.second.type == ChartEvent::NOTE)
-        event.second.performanceTimings.emplace_back(UNPLAYED_NOTE);
+        {
+            event.second.performanceTimings.emplace_back(UNPLAYED_NOTE);
+        }
     }
 }
 
@@ -141,7 +142,7 @@ void ChartPerformanceScene::paint (juce::Graphics& g)
     {
         if (event.second.type == ChartEvent::NOTE)
         {
-            auto notePosition = static_cast<int>((timeMs - event.first) * pixelsPerMillisecond) + lanes[0].getBottom();
+            auto notePosition = static_cast<long>((timeMs - event.first) * pixelsPerMillisecond) + lanes[0].getBottom();
             g.drawRect (lanes[event.second.inputButton - 1].withY (notePosition - 3).withHeight (6));
         }
     }

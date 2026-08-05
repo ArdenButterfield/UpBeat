@@ -106,13 +106,22 @@ void ChartPerformanceScene::startGame()
 
 void ChartPerformanceScene::update()
 {
+    auto elapsed = getMillisecondsSinceLastUpdate();
+
     if (playing)
     {
-        auto elapsed = getMillisecondsSinceLastUpdate();
         timeMs += elapsed;
         for (auto& indicator : indicatorLighting)
         {
             indicator = std::max(0.f, indicator - elapsed * 0.001f);
+        }
+    }
+
+    for (int i = toleranceLabels.size() - 1; i >= 0; --i)
+    {
+        if (toleranceLabels[i]->advance (static_cast<double> (elapsed)))
+        {
+            toleranceLabels.remove (i);
         }
     }
 
@@ -205,7 +214,7 @@ bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
     return true;
 }
 
-ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long long time) const
+ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long long time)
 {
     std::cout << "searching at lane " << lane << ", time " << time << std::endl;
     auto totalHitWindow = gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES-1];
@@ -224,6 +233,14 @@ ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long long ti
             closestNote = &(it->second);
         }
     }
-    std::cout << *gameState->getMessage (closeness) << std::endl;
+    auto message = gameState->getMessage (closeness);
+    std::cout << *message << std::endl;
+
+    constexpr int toleranceLabelHeight = 20;
+    auto laneBounds = lanes[lane];
+    auto* label = toleranceLabels.add (new ToleranceLabel (*message));
+    label->setBounds (laneBounds.getX(), laneBounds.getBottom() - toleranceLabelHeight, laneBounds.getWidth(), toleranceLabelHeight);
+    addAndMakeVisible (label);
+
     return closestNote;
 }

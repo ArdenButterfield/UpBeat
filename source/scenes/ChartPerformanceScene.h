@@ -9,6 +9,7 @@
 #include "../Audio/SquareWaveSynth.h"
 #include "../Audio/MetronomeSynth.h"
 #include "Scene.h"
+#include "ToleranceLabel.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
 class ChartPerformanceScene : public Scene, public juce::Button::Listener
@@ -51,7 +52,9 @@ private:
 
     long long gameStartTime;
 
-    ChartEvent* findClosestNoteForHit(int lane, long long time) const;
+    ChartEvent* findClosestNoteForHit(int lane, long long time);
+
+    juce::OwnedArray<ToleranceLabel> toleranceLabels;
 
     std::multimap<long long, ChartEvent>::iterator playbackIterator;
 

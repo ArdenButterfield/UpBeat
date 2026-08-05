@@ -15,7 +15,7 @@ struct ChartEvent
         midiNote = event->message.getNoteNumber();
         lengthMs = static_cast<long>(event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000);
         timeMs = static_cast<long>(event->message.getTimeStamp() * 1000);
-        inputButton = (event->message.getNoteNumber() % numInputLanes) + 1;
+        inputButton = (event->message.getNoteNumber() % numInputLanes);
         type = NOTE;
     }
     enum eventType

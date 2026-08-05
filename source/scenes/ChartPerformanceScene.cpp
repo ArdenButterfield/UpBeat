@@ -34,7 +34,6 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
             auto e = playbackQueue.back();
             playbackQueue.pop();
             auto midiNote = e->midiNote;
-            std::cout << "starting synth with pitch " << midiNote << std::endl;
             synth.noteOn (midiNote);
         }
     }
@@ -49,7 +48,6 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
             if (event->second.type == ChartEvent::NOTE)
             {
                 backgroundSynth.noteOn (event->second.midiNote);
-                std::cout<< "background note at time " << bufferStartTime << std::endl;
             }
         }
         elapsedSamples += audio_buffer.getNumSamples();
@@ -143,7 +141,7 @@ void ChartPerformanceScene::paint (juce::Graphics& g)
         if (event.second.type == ChartEvent::NOTE)
         {
             auto notePosition = static_cast<long>((timeMs - event.first) * pixelsPerMillisecond) + lanes[0].getBottom();
-            g.drawRect (lanes[event.second.inputButton - 1].withY (notePosition - 3).withHeight (6));
+            g.drawRect (lanes[event.second.inputButton].withY (notePosition - 3).withHeight (6));
         }
     }
 }
@@ -170,13 +168,11 @@ bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
     {
         if (keys[i] == key.getKeyCode())
         {
-            std::cout << "key" << i << " pressed at " << hitTime << std::endl;
             indicatorLighting[i] = 1;
             auto closestEvent = findClosestNoteForHit (i, hitTime);
             if (closestEvent != nullptr)
             {
-                std::cout << "event found at time " << closestEvent->timeMs << " pitch " << closestEvent->midiNote << std::endl;
-                auto scopedLock = juce::ScopedLock (playbackLock);  
+                auto scopedLock = juce::ScopedLock (playbackLock);
                 playbackQueue.push (closestEvent);
             }
         }
@@ -189,8 +185,8 @@ ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long time) c
     auto totalHitWindow = gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES-1];
     auto closeness = totalHitWindow+1;
     ChartEvent* closestNote = nullptr;
-    for (auto it = gameState->currentChart->events.lower_bound (timeMs - totalHitWindow);
-        it != gameState->currentChart->events.end() && it->first < timeMs + totalHitWindow;
+    for (auto it = gameState->currentChart->events.lower_bound (time - totalHitWindow);
+        it != gameState->currentChart->events.end() && it->first < time + totalHitWindow;
         ++it)
     {
         if (it->second.type == ChartEvent::NOTE && it->second.inputButton == lane && abs(it->first - time) < closeness)

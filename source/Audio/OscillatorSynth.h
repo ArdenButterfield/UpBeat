@@ -23,6 +23,10 @@ public:
 protected:
     virtual float getSample (double phase) const = 0;
 
+    // Subclasses can override to shape their envelope, e.g. a short click
+    // instead of the default sustained, slowly-decaying tone.
+    virtual float getDecaySeconds() const { return 1.0f; }
+
 private:
     struct Voice
     {
@@ -33,7 +37,6 @@ private:
     };
 
     static constexpr int maxVoices = 16;
-    static constexpr float decaySeconds = 1.0f;
     static constexpr float outputGain = 0.15f;
 
     static double midiNoteToFrequency (int midiNote);

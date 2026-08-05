@@ -5,8 +5,9 @@
 #ifndef UPBEAT_CHARTPERFORMANCESCENE_H
 #define UPBEAT_CHARTPERFORMANCESCENE_H
 
-#include "../Audio/SquareWaveSynth.h"
 #include "../Audio/SineWaveSynth.h"
+#include "../Audio/SquareWaveSynth.h"
+#include "../Audio/MetronomeSynth.h"
 #include "Scene.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
@@ -25,6 +26,7 @@ private:
 
     SquareWaveSynth synth;
     SineWaveSynth backgroundSynth;
+    MetronomeSynth metronomeSynth;
 
     void buttonClicked(juce::Button*) override;
     void update() override;

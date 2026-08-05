@@ -80,7 +80,7 @@ Chart::Chart (const juce::MemoryBlock& _midiData) : midiData (_midiData)
             if (timeSigChanged)
                 beatInBar = 0;
 
-            auto type = (beatInBar == 0) ? ChartEvent::BARLINE : ChartEvent::BEATLINE;
+            auto type = (beatInBar == 0) ? ChartEvent::BARLINE : ChartEvent::BEAT;
             auto chartEvent = ChartEvent (static_cast<long> (t * 1000.0), type);
             events.insert ({ chartEvent.timeMs, std::move (chartEvent) });
 

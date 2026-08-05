@@ -14,7 +14,7 @@ struct ChartEvent
     {
         NULL_EVENT = 0,
         BARLINE,
-        BEATLINE,
+        BEAT,
         NOTE,
         BACKGROUND_NOTE
     };

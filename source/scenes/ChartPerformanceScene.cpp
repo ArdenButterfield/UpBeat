@@ -22,6 +22,7 @@ void ChartPerformanceScene::prepareToPlay (double _sampleRate, int samplesPerBlo
     juce::ignoreUnused (samplesPerBlock);
     synth.prepareToPlay (sampleRate);
     backgroundSynth.prepareToPlay (sampleRate);
+    metronomeSynth.prepareToPlay (sampleRate);
 }
 
 void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer, juce::MidiBuffer& midi_message_metadatas)
@@ -48,6 +49,12 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
             if (event->second.type == ChartEvent::NOTE)
             {
                 backgroundSynth.noteOn (event->second.midiNote);
+            } else if (event->second.type == ChartEvent::BARLINE)
+            {
+                metronomeSynth.noteOn (MetronomeSynth::BARLINE);
+            } else if (event->second.type == ChartEvent::BEAT)
+            {
+                metronomeSynth.noteOn (MetronomeSynth::BEAT);
             }
         }
         elapsedSamples += audio_buffer.getNumSamples();
@@ -58,6 +65,7 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
 
     synth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
     backgroundSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+    metronomeSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
 
 }
 SceneIDs::SceneID ChartPerformanceScene::getDesiredSceneID()
@@ -143,7 +151,7 @@ void ChartPerformanceScene::paint (juce::Graphics& g)
         {
             g.setColour (juce::Colours::pink);
             g.drawRect (lanes[event.second.inputButton].withY (eventYPosition - 3).withHeight (6));
-        } else if (event.second.type == ChartEvent::BEATLINE)
+        } else if (event.second.type == ChartEvent::BEAT)
         {
             g.setColour(juce::Colours::grey);
             g.drawHorizontalLine (eventYPosition, lanes[0].getX(), lanes.back().getRight());
@@ -181,6 +189,7 @@ bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
             auto closestEvent = findClosestNoteForHit (i, hitTime);
             if (closestEvent != nullptr)
             {
+                closestEvent->performanceTimings.back() = hitTime;
                 auto scopedLock = juce::ScopedLock (playbackLock);
                 playbackQueue.push (closestEvent);
             }
@@ -198,7 +207,10 @@ ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long time) c
         it != gameState->currentChart->events.end() && it->first < time + totalHitWindow;
         ++it)
     {
-        if (it->second.type == ChartEvent::NOTE && it->second.inputButton == lane && abs(it->first - time) < closeness)
+        if (it->second.type == ChartEvent::NOTE
+            && it->second.inputButton == lane
+            && abs(it->first - time) < closeness
+            && it->second.performanceTimings.back() != UNPLAYED_NOTE)
         {
             closeness = abs(it->first - time);
             closestNote = &(it->second);

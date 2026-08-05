@@ -7,7 +7,7 @@
 void OscillatorSynth::prepareToPlay (double newSampleRate)
 {
     sampleRate = newSampleRate;
-    amplitudeDecrementPerSample = 1.0f / (decaySeconds * static_cast<float>(sampleRate));
+    amplitudeDecrementPerSample = 1.0f / (getDecaySeconds() * static_cast<float>(sampleRate));
 }
 
 void OscillatorSynth::noteOn (int midiNote)

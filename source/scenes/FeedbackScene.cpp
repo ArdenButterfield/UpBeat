@@ -4,10 +4,13 @@
 
 #include "FeedbackScene.h"
 
-FeedbackScene::FeedbackScene (GameState* gs) : Scene (gs), desiredSceneId (SceneIDs::CHART_FEEDBACK_SCENE)
+FeedbackScene::FeedbackScene (GameState* gs) : Scene (gs), desiredSceneId (SceneIDs::CHART_FEEDBACK_SCENE), retryButton ("Retry")
 {
     addAndMakeVisible (performanceGraph);
     buildPerformanceGraph();
+
+    addAndMakeVisible (retryButton);
+    retryButton.addListener (this);
 }
 
 FeedbackScene::~FeedbackScene()
@@ -57,9 +60,22 @@ void FeedbackScene::paint (juce::Graphics& g)
 
 void FeedbackScene::resized()
 {
+    constexpr int retryButtonHeight = 40;
+
     auto titleSection = getLocalBounds().withHeight (40);
     auto bodySection = getLocalBounds().withTrimmedTop (titleSection.getHeight());
+    auto retryButtonSection = bodySection.removeFromBottom (retryButtonHeight);
+
     performanceGraph.setBounds (bodySection);
+    retryButton.setBounds (retryButtonSection.withSizeKeepingCentre (150, 30));
+}
+
+void FeedbackScene::buttonClicked (juce::Button* b)
+{
+    if (b == &retryButton)
+    {
+        desiredSceneId = SceneIDs::CHART_PERFORMANCE_SCENE;
+    }
 }
 
 void FeedbackScene::update()

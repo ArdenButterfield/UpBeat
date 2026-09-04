@@ -7,7 +7,7 @@
 #include "Scene.h"
 #include "../UI/LineGraph.h"
 
-class FeedbackScene : public Scene
+class FeedbackScene : public Scene, public juce::Button::Listener
 {
 public:
     explicit FeedbackScene(GameState* gs);
@@ -20,8 +20,10 @@ public:
 private:
     SceneIDs::SceneID desiredSceneId;
     LineGraph performanceGraph;
+    juce::TextButton retryButton;
 
     void buildPerformanceGraph();
+    void buttonClicked(juce::Button*) override;
 };
 
 #endif //UPBEAT_FEEDBACKSCENE_H

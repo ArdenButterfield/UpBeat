@@ -8,8 +8,8 @@
 #include "../Audio/SineWaveSynth.h"
 #include "../Audio/SquareWaveSynth.h"
 #include "../Audio/MetronomeSynth.h"
+#include "../UI/ToleranceLabel.h"
 #include "Scene.h"
-#include "ToleranceLabel.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
 class ChartPerformanceScene : public Scene, public juce::Button::Listener
@@ -38,6 +38,8 @@ private:
     bool playing;
     long long timeMs;
     long long elapsedSamples;
+    long long lastNoteTimeMs;
+    SceneIDs::SceneID desiredSceneId;
     double pixelsPerMillisecond = 0.2;
 
     juce::Rectangle<int> laneOutline;

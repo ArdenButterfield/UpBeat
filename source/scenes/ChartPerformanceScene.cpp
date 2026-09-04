@@ -4,7 +4,7 @@
 
 #include "ChartPerformanceScene.h"
 
-ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playing(false)
+ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
     addAndMakeVisible (startButton);
     startButton.addListener (this);
@@ -71,7 +71,7 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
 }
 SceneIDs::SceneID ChartPerformanceScene::getDesiredSceneID()
 {
-    return SceneIDs::CHART_PERFORMANCE_SCENE;
+    return desiredSceneId;
 }
 SceneIDs::SceneID ChartPerformanceScene::getSceneID() const
 {
@@ -95,11 +95,13 @@ void ChartPerformanceScene::startGame()
     grabKeyboardFocus();
     playbackIterator = gameState->currentChart->events.lower_bound (timeMs);
 
+    lastNoteTimeMs = 0;
     for (auto& event : gameState->currentChart->events)
     {
         if (event.second.type == ChartEvent::NOTE)
         {
             event.second.performanceTimings.emplace_back(UNPLAYED_NOTE);
+            lastNoteTimeMs = std::max (lastNoteTimeMs, event.first);
         }
     }
 }
@@ -114,6 +116,11 @@ void ChartPerformanceScene::update()
         for (auto& indicator : indicatorLighting)
         {
             indicator = std::max(0.f, indicator - elapsed * 0.001f);
+        }
+
+        if (timeMs > lastNoteTimeMs + 500)
+        {
+            desiredSceneId = SceneIDs::CHART_FEEDBACK_SCENE;
         }
     }
 
@@ -205,7 +212,7 @@ bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
             auto closestEvent = findClosestNoteForHit (i, hitTime);
             if (closestEvent != nullptr)
             {
-                closestEvent->performanceTimings.back() = hitTime;
+                closestEvent->performanceTimings.back() = hitTime - closestEvent->timeMs;
                 auto scopedLock = juce::ScopedLock (playbackLock);
                 playbackQueue.push (closestEvent);
             }

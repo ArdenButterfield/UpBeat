@@ -10,8 +10,9 @@ ChartSelectionScene::ChartSelectionScene(GameState* gs) : Scene(gs), desiredScen
 {
     for (auto& entry : BundledResources::listEntries ("default_charts/midi"))
     {
-        chartSelectionButtons.push_back (std::make_unique<juce::TextButton> (entry));
-        gameState->charts.push_back (Chart(BundledResources::loadFile (entry)));
+        auto midiData = BundledResources::loadFile (entry);
+        chartSelectionButtons.push_back (std::make_unique<ChartSelectionButton> (entry, (int) gameState->charts.size(), midiData));
+        gameState->charts.push_back (Chart (midiData));
     }
     for (auto& button : chartSelectionButtons)
     {
@@ -40,15 +41,10 @@ void ChartSelectionScene::paint (juce::Graphics& g)
 
 void ChartSelectionScene::buttonClicked (juce::Button* b)
 {
-    int i = 0;
-    for (auto& button : chartSelectionButtons)
+    if (auto* chartButton = dynamic_cast<ChartSelectionButton*> (b))
     {
-        if (button.get() == b)
-        {
-            gameState->currentChart = &gameState->charts[i];
-            desiredSceneId = SceneIDs::CHART_PERFORMANCE_SCENE;
-            return;
-        }
+        gameState->currentChart = &gameState->charts[chartButton->chartIndex];
+        desiredSceneId = SceneIDs::CHART_PERFORMANCE_SCENE;
     }
 }
 void ChartSelectionScene::resized()

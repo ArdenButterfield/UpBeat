@@ -6,6 +6,7 @@
 #define UPBEAT_CHARTSELECTIONSCENE_H
 
 #include "Scene.h"
+#include "../UI/ChartSelectionButton.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
 class ChartSelectionScene : public Scene, public juce::Button::Listener
@@ -21,7 +22,7 @@ public:
     SceneIDs::SceneID getSceneID() const override;
 private:
     SceneIDs::SceneID desiredSceneId;
-    std::vector<std::unique_ptr<juce::TextButton>> chartSelectionButtons;
+    std::vector<std::unique_ptr<ChartSelectionButton>> chartSelectionButtons;
 };
 
 #endif //UPBEAT_CHARTSELECTIONSCENE_H

@@ -2,8 +2,13 @@
 #include <PluginProcessor.h>
 #include <BundledResources.h>
 
+#include <juce_audio_basics/juce_audio_basics.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+
+#include <map>
+#include <set>
 
 TEST_CASE ("one is equal to one", "[dummy]")
 {
@@ -35,6 +40,32 @@ TEST_CASE ("Bundled Resources")
     auto helloMid = BundledResources::loadFile ("default_charts/midi/hello.mid");
     REQUIRE (helloMid.getSize() > 0);
     REQUIRE (juce::String::toHexString (helloMid.getData(), (int) helloMid.getSize()).length() > 0);
+}
+
+TEST_CASE ("invent6.mid has notes on 2 channels", "[midi]")
+{
+    auto invent6Mid = BundledResources::loadFile ("default_charts/midi/invent6.mid");
+    REQUIRE (invent6Mid.getSize() > 0);
+
+    juce::MidiFile midiFile;
+    auto inputStream = juce::MemoryInputStream (invent6Mid, false);
+    REQUIRE (midiFile.readFrom (inputStream));
+
+    std::map<int, int> noteOnCountByChannel;
+    for (int trackIndex = 0; trackIndex < midiFile.getNumTracks(); ++trackIndex)
+    {
+        auto* track = midiFile.getTrack (trackIndex);
+        for (int i = 0; i < track->getNumEvents(); ++i)
+        {
+            auto& message = track->getEventPointer (i)->message;
+            if (message.isNoteOn())
+                noteOnCountByChannel[message.getChannel()] += 1;
+        }
+    }
+
+    REQUIRE (noteOnCountByChannel.size() == 2);
+    for (auto& [channel, count] : noteOnCountByChannel)
+        CHECK (count > 0);
 }
 
 

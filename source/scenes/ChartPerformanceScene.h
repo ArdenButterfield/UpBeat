@@ -24,6 +24,10 @@ public:
     SceneIDs::SceneID getSceneID() const override;
 private:
     juce::TextButton startButton;
+    juce::Slider tempoScaleSlider;
+    juce::Label tempoScaleLabel;
+    juce::Slider noteVelocitySlider;
+    juce::Label noteVelocityLabel;
 
     SquareWaveSynth synth;
     SineWaveSynth backgroundSynth;
@@ -40,7 +44,6 @@ private:
     long long elapsedSamples;
     long long lastNoteTimeMs;
     SceneIDs::SceneID desiredSceneId;
-    double pixelsPerMillisecond = 0.2;
 
     juce::Rectangle<int> laneOutline;
     std::vector<juce::Rectangle<int>> lanes;

@@ -12,7 +12,6 @@ struct GameState
 {
     std::vector<Chart> charts;
     Chart* currentChart;
-    static constexpr int numberOfInputLanes = 4;
     static constexpr int NUM_TOLERANCE_CATEGORIES = 4;
 
     [[nodiscard]] const std::string* getMessage (long long difference) const

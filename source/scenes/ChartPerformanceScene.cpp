@@ -4,11 +4,24 @@
 
 #include "ChartPerformanceScene.h"
 
+namespace
+{
+    // Central row of the keyboard: lane 0 maps to 'a', lane 1 to 's', and so on.
+    constexpr std::array<int, 10> laneKeyCodes = { 65, 83, 68, 70, 71, 72, 74, 75, 76, 59 };
+}
+
 ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
+    auto numLanes = gameState->currentChart->numLanes;
+    lanes.resize ((size_t) numLanes);
+    buttonIndicators.resize ((size_t) numLanes);
+    indicatorLighting.assign ((size_t) numLanes, 0.f);
+    keys.resize ((size_t) numLanes);
+    for (int i = 0; i < numLanes; ++i)
+        keys[(size_t) i] = (i < (int) laneKeyCodes.size()) ? laneKeyCodes[(size_t) i] : -1;
+
     addAndMakeVisible (startButton);
     startButton.addListener (this);
-    indicatorLighting.fill(0);
     setWantsKeyboardFocus (true);
     elapsedSamples = 0;
 }
@@ -132,7 +145,7 @@ void ChartPerformanceScene::update()
         }
     }
 
-    for (int i = 0; i < GameState::numberOfInputLanes; ++i)
+    for (size_t i = 0; i < keys.size(); ++i)
     {
         if (juce::KeyPress::isKeyCurrentlyDown(keys[i]))
         {
@@ -154,7 +167,7 @@ void ChartPerformanceScene::paint (juce::Graphics& g)
         g.drawRect (lane);
     }
 
-    for (int i = 0; i < GameState::numberOfInputLanes; ++i)
+    for (size_t i = 0; i < buttonIndicators.size(); ++i)
     {
         g.setColour (juce::Colours::white.withAlpha (indicatorLighting[i]));
         g.fillRect (buttonIndicators[i]);
@@ -192,24 +205,24 @@ void ChartPerformanceScene::resized()
     laneOutline = getLocalBounds().withWidth (std::min(300, getWidth() - 40)).withTrimmedTop (20).withTrimmedBottom (20).withCentre ({getWidth() / 2, getHeight() / 2});
     auto lanesInner = laneOutline.reduced(5).withTrimmedBottom (30);
     auto indicatorsInner = laneOutline.reduced(5).withTop (lanesInner.getBottom() + 5);
-    auto laneW = lanesInner.getWidth() / 4;
-    for (int i = 0; i < lanes.size(); ++i)
+    auto laneW = lanes.empty() ? lanesInner.getWidth() : lanesInner.getWidth() / (int) lanes.size();
+    for (size_t i = 0; i < lanes.size(); ++i)
     {
-        lanes[i] = lanesInner.withWidth (laneW).withX(lanesInner.getX() + i * laneW);
-        buttonIndicators[i] = indicatorsInner.withWidth (laneW).withX(lanesInner.getX() + i * laneW);
+        lanes[i] = lanesInner.withWidth (laneW).withX(lanesInner.getX() + (int) i * laneW);
+        buttonIndicators[i] = indicatorsInner.withWidth (laneW).withX(lanesInner.getX() + (int) i * laneW);
     }
 }
 
 bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
 {
     auto hitTime = juce::Time::currentTimeMillis() - gameStartTime;
-    for (int i = 0; i < GameState::numberOfInputLanes; ++i)
+    for (size_t i = 0; i < keys.size(); ++i)
     {
         if (keys[i] == key.getKeyCode())
         {
             std::cout << "hit at time " << hitTime << " lane " << i << std::endl;
             indicatorLighting[i] = 1;
-            auto closestEvent = findClosestNoteForHit (i, hitTime);
+            auto closestEvent = findClosestNoteForHit ((int) i, hitTime);
             if (closestEvent != nullptr)
             {
                 closestEvent->performanceTimings.back() = hitTime - closestEvent->timeMs;

@@ -1,6 +1,7 @@
 #include "helpers/test_helpers.h"
 #include <PluginProcessor.h>
 #include <BundledResources.h>
+#include <Chart/Chart.h>
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
@@ -68,6 +69,60 @@ TEST_CASE ("invent6.mid has notes on 2 channels", "[midi]")
         CHECK (count > 0);
 }
 
+
+TEST_CASE ("Chart assigns lanes based on selected track/channel pairs", "[chart]")
+{
+    juce::MidiMessageSequence sequence;
+    sequence.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100).withTimeStamp (0));
+    sequence.addEvent (juce::MidiMessage::noteOff (1, 60).withTimeStamp (100));
+    sequence.addEvent (juce::MidiMessage::noteOn (2, 61, (juce::uint8) 100).withTimeStamp (200));
+    sequence.addEvent (juce::MidiMessage::noteOff (2, 61).withTimeStamp (300));
+    sequence.addEvent (juce::MidiMessage::noteOn (5, 62, (juce::uint8) 100).withTimeStamp (400));
+    sequence.addEvent (juce::MidiMessage::noteOff (5, 62).withTimeStamp (500));
+    sequence.updateMatchedPairs();
+
+    juce::MidiFile midiFile;
+    midiFile.setTicksPerQuarterNote (960);
+    midiFile.addTrack (sequence);
+
+    juce::MemoryBlock midiData;
+    juce::MemoryOutputStream outStream (midiData, false);
+    REQUIRE (midiFile.writeTo (outStream));
+
+    // Only channels 1 and 2 are selected as playable lanes; channel 5 becomes a background note.
+    Chart chart (midiData, "test chart", { { 0, 1 }, { 0, 2 } });
+
+    REQUIRE (chart.numLanes == 2);
+
+    std::map<int, int> countByLane;
+    int backgroundCount = 0;
+    for (auto& [time, event] : chart.events)
+    {
+        if (event.type == ChartEvent::NOTE)
+            countByLane[event.inputButton] += 1;
+        else if (event.type == ChartEvent::BACKGROUND_NOTE)
+            backgroundCount += 1;
+    }
+
+    CHECK (countByLane[0] == 1);
+    CHECK (countByLane[1] == 1);
+    CHECK (backgroundCount == 1);
+}
+
+TEST_CASE ("Chart::analyzeTrackChannels reports note counts per track/channel", "[chart]")
+{
+    auto invent6Mid = BundledResources::loadFile ("default_charts/midi/invent6.mid");
+    auto trackChannels = Chart::analyzeTrackChannels (invent6Mid);
+
+    REQUIRE (! trackChannels.empty());
+
+    std::set<std::pair<int, int>> seen;
+    for (auto& info : trackChannels)
+    {
+        CHECK (info.noteCount > 0);
+        CHECK (seen.insert ({ info.track, info.channel }).second);
+    }
+}
 
 #ifdef PAMPLEJUCE_IPP
     #include <ipp.h>

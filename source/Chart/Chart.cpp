@@ -3,11 +3,36 @@
 //
 
 #include "Chart.h"
-#include "../GameState.h"
 
 #include "juce_audio_basics/juce_audio_basics.h"
 
-Chart::Chart (const juce::MemoryBlock& _midiData) : midiData (_midiData)
+std::vector<TrackChannelInfo> Chart::analyzeTrackChannels (const juce::MemoryBlock& midiData)
+{
+    juce::MidiFile midiFile;
+    auto inputStream = juce::MemoryInputStream (midiData, false);
+    midiFile.readFrom (inputStream);
+
+    std::map<std::pair<int, int>, int> noteCountByTrackAndChannel;
+    for (int trackIndex = 0; trackIndex < midiFile.getNumTracks(); ++trackIndex)
+    {
+        auto* track = midiFile.getTrack (trackIndex);
+        for (int i = 0; i < track->getNumEvents(); ++i)
+        {
+            auto& message = track->getEventPointer (i)->message;
+            if (message.isNoteOn())
+                noteCountByTrackAndChannel[{ trackIndex, message.getChannel() }] += 1;
+        }
+    }
+
+    std::vector<TrackChannelInfo> result;
+    for (auto& [trackAndChannel, count] : noteCountByTrackAndChannel)
+        result.push_back ({ trackAndChannel.first, trackAndChannel.second, count });
+
+    return result;
+}
+
+Chart::Chart (const juce::MemoryBlock& _midiData, const juce::String& _name, const std::vector<std::pair<int, int>>& selectedTrackChannels)
+    : name (_name), midiData (_midiData), numLanes (static_cast<int> (selectedTrackChannels.size()))
 {
     juce::MidiFile midiFile;
     auto inputStream = juce::MemoryInputStream(midiData, false);
@@ -21,20 +46,22 @@ Chart::Chart (const juce::MemoryBlock& _midiData) : midiData (_midiData)
     midiFile.findAllTempoEvents (tempoChangeEvents);
     midiFile.findAllTimeSigEvents (timeSigEvents);
 
-    auto activeTrack = midiFile.getTrack(0); // TODO: in the future, let the user pick the track to perform, with the other tracks as background.
-    if (activeTrack == nullptr)
+    std::map<std::pair<int, int>, int> laneByTrackAndChannel;
+    for (size_t lane = 0; lane < selectedTrackChannels.size(); ++lane)
+        laneByTrackAndChannel[selectedTrackChannels[lane]] = static_cast<int> (lane);
+
+    for (int trackIndex = 0; trackIndex < midiFile.getNumTracks(); ++trackIndex)
     {
-        DBG("No active tracks found!");
-    } else
-    {
-        for (int i = 0; i < activeTrack->getNumEvents(); ++i)
+        auto* track = midiFile.getTrack (trackIndex);
+        for (int i = 0; i < track->getNumEvents(); ++i)
         {
-            auto event = activeTrack->getEventPointer (i);
+            auto event = track->getEventPointer (i);
 
             if (event->message.isNoteOn ())
             {
-                auto chartEvent = ChartEvent(event, GameState::numberOfInputLanes);
-                std::cout << "create event at " << chartEvent.timeMs << ", button " << chartEvent.inputButton << std::endl;
+                auto laneIt = laneByTrackAndChannel.find ({ trackIndex, event->message.getChannel() });
+                auto lane = (laneIt != laneByTrackAndChannel.end()) ? laneIt->second : -1;
+                auto chartEvent = ChartEvent (event, lane);
                 events.insert ({chartEvent.timeMs, std::move(chartEvent)});
             }
         }

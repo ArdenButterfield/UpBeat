@@ -43,10 +43,10 @@ private:
     double pixelsPerMillisecond = 0.2;
 
     juce::Rectangle<int> laneOutline;
-    std::array<juce::Rectangle<int>, GameState::numberOfInputLanes> lanes;
-    std::array<juce::Rectangle<int>, GameState::numberOfInputLanes> buttonIndicators;
-    std::array<float, GameState::numberOfInputLanes> indicatorLighting;
-    std::array<int, GameState::numberOfInputLanes> keys = {65, 83, 68, 70};
+    std::vector<juce::Rectangle<int>> lanes;
+    std::vector<juce::Rectangle<int>> buttonIndicators;
+    std::vector<float> indicatorLighting;
+    std::vector<int> keys;
 
     std::queue<ChartEvent*> playbackQueue;
 

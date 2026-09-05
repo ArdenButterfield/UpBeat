@@ -19,13 +19,16 @@ struct ChartEvent
         BACKGROUND_NOTE
     };
 
-    ChartEvent(const juce::MidiMessageSequence::MidiEventHolder* event, int numInputLanes)
+    // inputButton is the lane this event should be assigned to, as resolved by the caller
+    // from the chart's selected (track, channel) pairs; -1 means the note is not playable
+    // and becomes a background note.
+    ChartEvent(const juce::MidiMessageSequence::MidiEventHolder* event, int resolvedInputButton)
     {
         midiNote = event->message.getNoteNumber();
         lengthMs = static_cast<long long>(event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000);
         timeMs = static_cast<long long>(event->message.getTimeStamp() * 1000);
-        inputButton = (event->message.getNoteNumber() % numInputLanes);
-        type = NOTE;
+        inputButton = resolvedInputButton;
+        type = (inputButton >= 0) ? NOTE : BACKGROUND_NOTE;
     }
 
     ChartEvent(long long timeMs, eventType type) : timeMs (timeMs), type (type), lengthMs (0), midiNote (0), inputButton (-1)

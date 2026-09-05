@@ -7,17 +7,14 @@
 
 #include "juce_gui_basics/juce_gui_basics.h"
 
+// A simple named, indexed button used for the selectable lists in the chart selection
+// and chart creation UI (e.g. "Your Charts" and "MIDI Files").
 class ChartSelectionButton : public juce::TextButton
 {
 public:
-    ChartSelectionButton (const juce::String& chartName, int chartIndex, const juce::MemoryBlock& midiData);
+    ChartSelectionButton (const juce::String& label, int index);
 
-    void paintButton (juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
-
-    int chartIndex;
-
-private:
-    juce::StringArray channelLines;
+    int index;
 };
 
 #endif //UPBEAT_CHARTSELECTIONBUTTON_H

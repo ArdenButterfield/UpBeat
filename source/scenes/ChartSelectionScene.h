@@ -6,6 +6,7 @@
 #define UPBEAT_CHARTSELECTIONSCENE_H
 
 #include "Scene.h"
+#include "../UI/ChartCreationPanel.h"
 #include "../UI/ChartSelectionButton.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
@@ -21,8 +22,14 @@ public:
     SceneIDs::SceneID getDesiredSceneID() override;
     SceneIDs::SceneID getSceneID() const override;
 private:
+    void rebuildChartButtons();
+    void openCreationPanel();
+    void closeCreationPanel();
+
     SceneIDs::SceneID desiredSceneId;
     std::vector<std::unique_ptr<ChartSelectionButton>> chartSelectionButtons;
+    juce::TextButton newChartButton { "New Chart" };
+    std::unique_ptr<ChartCreationPanel> creationPanel;
 };
 
 #endif //UPBEAT_CHARTSELECTIONSCENE_H

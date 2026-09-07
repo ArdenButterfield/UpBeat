@@ -4,22 +4,8 @@
 
 #include "ChartPerformanceScene.h"
 
-namespace
+ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), noteLaneDisplay (gs, gs->currentChart->numLanes), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
-    // Central row of the keyboard: lane 0 maps to 'a', lane 1 to 's', and so on.
-    constexpr std::array<int, 10> laneKeyCodes = { 65, 83, 68, 70, 71, 72, 74, 75, 76, 59 };
-}
-
-ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
-{
-    auto numLanes = gameState->currentChart->numLanes;
-    lanes.resize ((size_t) numLanes);
-    buttonIndicators.resize ((size_t) numLanes);
-    indicatorLighting.assign ((size_t) numLanes, 0.f);
-    keys.resize ((size_t) numLanes);
-    for (int i = 0; i < numLanes; ++i)
-        keys[(size_t) i] = (i < (int) laneKeyCodes.size()) ? laneKeyCodes[(size_t) i] : -1;
-
     addAndMakeVisible (startButton);
     startButton.addListener (this);
 
@@ -34,11 +20,18 @@ ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startBu
 
     noteVelocitySlider.setRange (0.05, 0.5);
     noteVelocitySlider.setValue (gameState->currentChart->noteOnScreenVelocity, juce::dontSendNotification);
-    noteVelocitySlider.onValueChange = [this] { gameState->currentChart->noteOnScreenVelocity = noteVelocitySlider.getValue(); };
+    noteVelocitySlider.onValueChange = [this]
+    {
+        gameState->currentChart->noteOnScreenVelocity = noteVelocitySlider.getValue();
+        noteLaneDisplay.setNoteOnScreenVelocity (noteVelocitySlider.getValue());
+    };
     addAndMakeVisible (noteVelocitySlider);
     noteVelocityLabel.setText ("Note velocity", juce::dontSendNotification);
     noteVelocityLabel.attachToComponent (&noteVelocitySlider, true);
     addAndMakeVisible (noteVelocityLabel);
+
+    noteLaneDisplay.setNoteOnScreenVelocity (gameState->currentChart->noteOnScreenVelocity);
+    addAndMakeVisible (noteLaneDisplay);
 
     setWantsKeyboardFocus (true);
     elapsedSamples = 0;
@@ -58,6 +51,7 @@ void ChartPerformanceScene::prepareToPlay (double _sampleRate, int samplesPerBlo
 
 void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer, juce::MidiBuffer& midi_message_metadatas)
 {
+    juce::ignoreUnused (midi_message_metadatas);
     auto lock = juce::ScopedTryLock(playbackLock);
     if (lock.isLocked())
     {
@@ -131,8 +125,8 @@ void ChartPerformanceScene::startGame()
     timeMs = -gameState->currentChart->countInTime;
     gameStartTime = juce::Time::currentTimeMillis();
     grabKeyboardFocus();
-    playbackIterator = gameState->currentChart->events.lower_bound (timeMs);
 
+    displayEvents.clear();
     lastNoteTimeMs = 0;
     for (auto& event : gameState->currentChart->events)
     {
@@ -141,7 +135,9 @@ void ChartPerformanceScene::startGame()
             event.second.performanceTimings.emplace_back(UNPLAYED_NOTE);
             lastNoteTimeMs = std::max (lastNoteTimeMs, event.first);
         }
+        displayEvents.insert ({ event.first, &event.second });
     }
+    noteLaneDisplay.setEvents (&displayEvents);
 }
 
 void ChartPerformanceScene::update()
@@ -152,10 +148,6 @@ void ChartPerformanceScene::update()
     {
         auto* chart = gameState->currentChart;
         timeMs = Chart::chartTimeForRealElapsedMs (juce::Time::currentTimeMillis() - gameStartTime, chart->tempoScale, chart->countInTime);
-        for (auto& indicator : indicatorLighting)
-        {
-            indicator = std::max(0.f, indicator - elapsed * 0.001f);
-        }
 
         if (timeMs > lastNoteTimeMs + 500)
         {
@@ -163,83 +155,13 @@ void ChartPerformanceScene::update()
         }
     }
 
-    for (int i = toleranceLabels.size() - 1; i >= 0; --i)
-    {
-        if (toleranceLabels[i]->advance (static_cast<double> (elapsed)))
-        {
-            toleranceLabels.remove (i);
-        }
-    }
-
-    for (size_t i = 0; i < keys.size(); ++i)
-    {
-        if (juce::KeyPress::isKeyCurrentlyDown(keys[i]))
-        {
-            indicatorLighting[i] = 1;
-        } else if (indicatorLighting[i] > 0.5f)
-        {
-            indicatorLighting[i] = 0.5f;
-        }
-    }
+    noteLaneDisplay.setPlayheadTimeMs (timeMs);
+    noteLaneDisplay.advance (elapsed);
 }
 
 void ChartPerformanceScene::paint (juce::Graphics& g)
 {
     g.fillAll(juce::Colours::darkgrey);
-    g.setColour (juce::Colours::lightgrey);
-    g.drawRect (laneOutline);
-    for (auto& lane : lanes)
-    {
-        g.drawRect (lane);
-    }
-
-    for (size_t i = 0; i < buttonIndicators.size(); ++i)
-    {
-        g.setColour (juce::Colours::white.withAlpha (indicatorLighting[i]));
-        g.fillRect (buttonIndicators[i]);
-    }
-
-    for (auto& event : gameState->currentChart->events)
-    {
-        long eventYPosition;
-        if (event.second.type == ChartEvent::NOTE)
-        {
-            // Notes arrive at the bottom of the screen exactly on time, and hang
-            // there until the "Perfect" tolerance window closes rather than sliding past.
-            auto departureTime = event.first + gameState->tolerances[0];
-
-            if (timeMs > departureTime)
-            {
-                continue;
-            }
-
-            auto clampedTime = std::min (timeMs, event.first);
-            eventYPosition = static_cast<long> ((clampedTime - event.first) * gameState->currentChart->noteOnScreenVelocity) + lanes[0].getBottom();
-        }
-        else
-        {
-            eventYPosition = static_cast<long> ((timeMs - event.first) * gameState->currentChart->noteOnScreenVelocity) + lanes[0].getBottom();
-        }
-
-        if (eventYPosition > lanes[0].getBottom() || eventYPosition < lanes[0].getY())
-        {
-            continue;
-        }
-
-        if (event.second.type == ChartEvent::NOTE)
-        {
-            g.setColour (juce::Colours::pink);
-            g.drawRect (lanes[event.second.inputButton].withY (eventYPosition - 3L).withHeight (6));
-        } else if (event.second.type == ChartEvent::BEAT)
-        {
-            g.setColour(juce::Colours::grey);
-            g.drawHorizontalLine (eventYPosition, lanes[0].getX(), lanes.back().getRight());
-        } else if (event.second.type == ChartEvent::BARLINE)
-        {
-            g.setColour (juce::Colours::white);
-            g.drawHorizontalLine (eventYPosition, lanes[0].getX(), lanes.back().getRight());
-        }
-    }
 }
 
 void ChartPerformanceScene::resized()
@@ -248,66 +170,19 @@ void ChartPerformanceScene::resized()
     startButton.setBounds (getLocalBounds().withSizeKeepingCentre (200, 40));
     tempoScaleSlider.setBounds (getLocalBounds().withSizeKeepingCentre (200, 20).withY (startButton.getBottom() + 30));
     noteVelocitySlider.setBounds (getLocalBounds().withSizeKeepingCentre (200, 20).withY (tempoScaleSlider.getBottom() + 20));
-    laneOutline = getLocalBounds().withWidth (std::min(300, getWidth() - 40)).withTrimmedTop (20).withTrimmedBottom (20).withCentre ({getWidth() / 2, getHeight() / 2});
-    auto lanesInner = laneOutline.reduced(5).withTrimmedBottom (30);
-    auto indicatorsInner = laneOutline.reduced(5).withTop (lanesInner.getBottom() + 5);
-    auto laneW = lanes.empty() ? lanesInner.getWidth() : lanesInner.getWidth() / (int) lanes.size();
-    for (size_t i = 0; i < lanes.size(); ++i)
-    {
-        lanes[i] = lanesInner.withWidth (laneW).withX(lanesInner.getX() + (int) i * laneW);
-        buttonIndicators[i] = indicatorsInner.withWidth (laneW).withX(lanesInner.getX() + (int) i * laneW);
-    }
+    auto laneOutline = getLocalBounds().withWidth (std::min(300, getWidth() - 40)).withTrimmedTop (20).withTrimmedBottom (20).withCentre ({getWidth() / 2, getHeight() / 2});
+    noteLaneDisplay.setBounds (laneOutline);
 }
 
 bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)
 {
     auto* chart = gameState->currentChart;
     auto hitTime = Chart::chartTimeForRealElapsedMs (juce::Time::currentTimeMillis() - gameStartTime, chart->tempoScale, chart->countInTime);
-    for (size_t i = 0; i < keys.size(); ++i)
+    auto* closestEvent = noteLaneDisplay.registerKeyPress (key, hitTime);
+    if (closestEvent != nullptr)
     {
-        if (keys[i] == key.getKeyCode())
-        {
-            std::cout << "hit at time " << hitTime << " lane " << i << std::endl;
-            indicatorLighting[i] = 1;
-            auto closestEvent = findClosestNoteForHit ((int) i, hitTime);
-            if (closestEvent != nullptr)
-            {
-                closestEvent->performanceTimings.back() = hitTime - closestEvent->timeMs;
-                auto scopedLock = juce::ScopedLock (playbackLock);
-                playbackQueue.push (closestEvent);
-            }
-        }
+        auto scopedLock = juce::ScopedLock (playbackLock);
+        playbackQueue.push (closestEvent);
     }
     return true;
-}
-
-ChartEvent* ChartPerformanceScene::findClosestNoteForHit (int lane, long long time)
-{
-    std::cout << "searching at lane " << lane << ", time " << time << std::endl;
-    auto totalHitWindow = gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES-1];
-    auto closeness = totalHitWindow+1;
-    ChartEvent* closestNote = nullptr;
-    for (auto it = gameState->currentChart->events.lower_bound (time - totalHitWindow);
-        it != gameState->currentChart->events.end() && it->first < time + totalHitWindow;
-        ++it)
-    {
-        if (it->second.type == ChartEvent::NOTE
-            && it->second.inputButton == lane
-            && abs(it->first - time) < closeness
-            && it->second.performanceTimings.back() == UNPLAYED_NOTE)
-        {
-            closeness = abs(it->first - time);
-            closestNote = &(it->second);
-        }
-    }
-    auto message = gameState->getMessage (closeness);
-    std::cout << *message << std::endl;
-
-    constexpr int toleranceLabelHeight = 20;
-    auto laneBounds = lanes[lane];
-    auto* label = toleranceLabels.add (new ToleranceLabel (*message));
-    label->setBounds (laneBounds.getX(), laneBounds.getBottom() - toleranceLabelHeight, laneBounds.getWidth(), toleranceLabelHeight);
-    addAndMakeVisible (label);
-
-    return closestNote;
 }

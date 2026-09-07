@@ -27,7 +27,9 @@ private:
     void closeCreationPanel();
 
     SceneIDs::SceneID desiredSceneId;
-    std::vector<std::unique_ptr<ChartSelectionButton>> chartSelectionButtons;
+    std::vector<std::unique_ptr<juce::Label>> chartTitleLabels;
+    std::vector<std::unique_ptr<ChartSelectionButton>> performanceButtons;
+    std::vector<std::unique_ptr<ChartSelectionButton>> practiceButtons;
     juce::TextButton newChartButton { "New Chart" };
     std::unique_ptr<ChartCreationPanel> creationPanel;
 };

@@ -18,13 +18,27 @@ ChartSelectionScene::~ChartSelectionScene()
 
 void ChartSelectionScene::rebuildChartButtons()
 {
-    chartSelectionButtons.clear();
+    chartTitleLabels.clear();
+    performanceButtons.clear();
+    practiceButtons.clear();
+
     for (int i = 0; i < (int) gameState->charts.size(); ++i)
     {
-        auto button = std::make_unique<ChartSelectionButton> (gameState->charts[(size_t) i].name, i);
-        addAndMakeVisible (button.get());
-        button->addListener (this);
-        chartSelectionButtons.push_back (std::move (button));
+        auto title = std::make_unique<juce::Label> (juce::String(), gameState->charts[(size_t) i].name);
+        title->setColour (juce::Label::textColourId, juce::Colours::white);
+        title->setFont (juce::Font (juce::FontOptions (18.0f)));
+        addAndMakeVisible (title.get());
+        chartTitleLabels.push_back (std::move (title));
+
+        auto performanceButton = std::make_unique<ChartSelectionButton> ("Performance", i);
+        addAndMakeVisible (performanceButton.get());
+        performanceButton->addListener (this);
+        performanceButtons.push_back (std::move (performanceButton));
+
+        auto practiceButton = std::make_unique<ChartSelectionButton> ("Practice", i);
+        addAndMakeVisible (practiceButton.get());
+        practiceButton->addListener (this);
+        practiceButtons.push_back (std::move (practiceButton));
     }
 }
 
@@ -86,10 +100,24 @@ void ChartSelectionScene::buttonClicked (juce::Button* b)
         return;
     }
 
-    if (auto* chartButton = dynamic_cast<ChartSelectionButton*> (b))
+    for (auto& button : performanceButtons)
     {
-        gameState->currentChart = &gameState->charts[(size_t) chartButton->index];
-        desiredSceneId = SceneIDs::CHART_PERFORMANCE_SCENE;
+        if (b == button.get())
+        {
+            gameState->currentChart = &gameState->charts[(size_t) button->index];
+            desiredSceneId = SceneIDs::CHART_PERFORMANCE_SCENE;
+            return;
+        }
+    }
+
+    for (auto& button : practiceButtons)
+    {
+        if (b == button.get())
+        {
+            gameState->currentChart = &gameState->charts[(size_t) button->index];
+            desiredSceneId = SceneIDs::CHART_PRACTICE_SCENE;
+            return;
+        }
     }
 }
 void ChartSelectionScene::resized()
@@ -97,12 +125,19 @@ void ChartSelectionScene::resized()
     constexpr int titleHeight = 40;
     constexpr int rowHeight = 70;
     constexpr int rowSpacing = 20;
+    constexpr int buttonWidth = 110;
+    constexpr int buttonSpacing = 10;
 
     auto bounds = getLocalBounds().withTrimmedLeft (10).withTrimmedRight (10).withTrimmedTop (titleHeight);
 
-    for (auto& button : chartSelectionButtons)
+    for (size_t i = 0; i < chartTitleLabels.size(); ++i)
     {
-        button->setBounds (bounds.removeFromTop (rowHeight));
+        auto row = bounds.removeFromTop (rowHeight);
+        auto buttonsArea = row.removeFromRight (buttonWidth * 2 + buttonSpacing);
+        practiceButtons[i]->setBounds (buttonsArea.removeFromRight (buttonWidth));
+        buttonsArea.removeFromRight (buttonSpacing);
+        performanceButtons[i]->setBounds (buttonsArea.removeFromRight (buttonWidth));
+        chartTitleLabels[i]->setBounds (row);
         bounds.removeFromTop (rowSpacing);
     }
 

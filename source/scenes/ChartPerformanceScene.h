@@ -8,7 +8,7 @@
 #include "../Audio/SineWaveSynth.h"
 #include "../Audio/SquareWaveSynth.h"
 #include "../Audio/MetronomeSynth.h"
-#include "../UI/ToleranceLabel.h"
+#include "../UI/NoteLaneDisplay.h"
 #include "Scene.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
@@ -33,23 +33,19 @@ private:
     SineWaveSynth backgroundSynth;
     MetronomeSynth metronomeSynth;
 
-    void buttonClicked(juce::Button*) override;
+    NoteLaneDisplay noteLaneDisplay;
+
+    void buttonClicked (juce::Button*) override;
     void update() override;
-    void paint(juce::Graphics& g) override;
+    void paint (juce::Graphics& g) override;
     void resized() override;
     void startGame();
-    bool keyPressed(const juce::KeyPress& key) override;
+    bool keyPressed (const juce::KeyPress& key) override;
     bool playing;
     long long timeMs;
     long long elapsedSamples;
     long long lastNoteTimeMs;
     SceneIDs::SceneID desiredSceneId;
-
-    juce::Rectangle<int> laneOutline;
-    std::vector<juce::Rectangle<int>> lanes;
-    std::vector<juce::Rectangle<int>> buttonIndicators;
-    std::vector<float> indicatorLighting;
-    std::vector<int> keys;
 
     std::queue<ChartEvent*> playbackQueue;
 
@@ -57,11 +53,9 @@ private:
 
     long long gameStartTime;
 
-    ChartEvent* findClosestNoteForHit(int lane, long long time);
-
-    juce::OwnedArray<ToleranceLabel> toleranceLabels;
-
-    std::multimap<long long, ChartEvent>::iterator playbackIterator;
+    // Pointer view of gameState->currentChart->events, built once at game start, that
+    // NoteLaneDisplay uses so its display/hit-testing code stays chart-agnostic.
+    std::multimap<long long, ChartEvent*> displayEvents;
 
     double sampleRate;
 };

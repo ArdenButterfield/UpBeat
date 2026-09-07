@@ -201,7 +201,25 @@ void ChartPerformanceScene::paint (juce::Graphics& g)
 
     for (auto& event : gameState->currentChart->events)
     {
-        auto eventYPosition = static_cast<long>((timeMs - event.first) * gameState->currentChart->noteOnScreenVelocity) + lanes[0].getBottom();
+        long eventYPosition;
+        if (event.second.type == ChartEvent::NOTE)
+        {
+            // Notes arrive at the bottom of the screen exactly on time, and hang
+            // there until the "Perfect" tolerance window closes rather than sliding past.
+            auto departureTime = event.first + gameState->tolerances[0];
+
+            if (timeMs > departureTime)
+            {
+                continue;
+            }
+
+            auto clampedTime = std::min (timeMs, event.first);
+            eventYPosition = static_cast<long> ((clampedTime - event.first) * gameState->currentChart->noteOnScreenVelocity) + lanes[0].getBottom();
+        }
+        else
+        {
+            eventYPosition = static_cast<long> ((timeMs - event.first) * gameState->currentChart->noteOnScreenVelocity) + lanes[0].getBottom();
+        }
 
         if (eventYPosition > lanes[0].getBottom() || eventYPosition < lanes[0].getY())
         {

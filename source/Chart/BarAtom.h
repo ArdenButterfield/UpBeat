@@ -19,6 +19,7 @@ public:
 
     long long lengthMs;
     int learnedScore = 0;
+    std::vector<bool> successHistory; // one entry per practice rep: true if every note was Great or Perfect
     std::multimap<long long, ChartEvent> events;
 
     // Splits a chart into consecutive bars at its BARLINE events, with each bar's event

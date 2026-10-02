@@ -9,16 +9,29 @@
 ChartPracticeScene::ChartPracticeScene (GameState* gs)
     : Scene (gs),
       startButton ("Start"),
+      playbackControls (gs->currentChart->tempoScale, gs->currentChart->noteOnScreenVelocity),
       noteLaneDisplay (gs, gs->currentChart->numLanes),
       bars (BarAtom::splitIntoBars (*gs->currentChart)),
       barProgressDisplay (static_cast<int> (bars.size())),
       playing (false),
       desiredSceneId (SceneIDs::CHART_PRACTICE_SCENE),
-      countInTime (gs->currentChart->countInTime),
-      tempoScale (gs->currentChart->tempoScale)
+      countInTime (gs->currentChart->countInTime)
 {
     addAndMakeVisible (startButton);
     startButton.addListener (this);
+
+    clock.setTempoScale (gameState->currentChart->tempoScale);
+    playbackControls.onTempoScaleChange = [this] (double tempoScale)
+    {
+        gameState->currentChart->tempoScale = tempoScale;
+        clock.setTempoScale (tempoScale);
+    };
+    playbackControls.onNoteVelocityChange = [this] (double velocity)
+    {
+        gameState->currentChart->noteOnScreenVelocity = velocity;
+        noteLaneDisplay.setNoteOnScreenVelocity (velocity);
+    };
+    addAndMakeVisible (playbackControls);
 
     noteLaneDisplay.setNoteOnScreenVelocity (gameState->currentChart->noteOnScreenVelocity);
     addAndMakeVisible (noteLaneDisplay);
@@ -26,7 +39,7 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
     addAndMakeVisible (barProgressDisplay);
 
     setWantsKeyboardFocus (true);
-    elapsedSamples = 0;
+    audioChartTimeMs = static_cast<double> (-countInTime);
 }
 
 ChartPracticeScene::~ChartPracticeScene()
@@ -57,10 +70,9 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
 
     if (playing)
     {
-        auto bufferStartRealMs = static_cast<long long> (elapsedSamples * 1000.0 / sampleRate);
-        auto bufferEndRealMs = static_cast<long long> ((elapsedSamples + audio_buffer.getNumSamples()) * 1000.0 / sampleRate);
-        auto bufferStartTime = Chart::chartTimeForRealElapsedMs (bufferStartRealMs, tempoScale, countInTime);
-        auto bufferEndTime = Chart::chartTimeForRealElapsedMs (bufferEndRealMs, tempoScale, countInTime);
+        auto bufferChartMs = audio_buffer.getNumSamples() * 1000.0 / sampleRate * clock.getTempoScale();
+        auto bufferStartTime = static_cast<long long> (std::floor (audioChartTimeMs));
+        auto bufferEndTime = static_cast<long long> (std::floor (audioChartTimeMs + bufferChartMs));
 
         auto displayLock = juce::ScopedTryLock (displayEventsLock);
         if (displayLock.isLocked())
@@ -81,11 +93,11 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
                 }
             }
         }
-        elapsedSamples += audio_buffer.getNumSamples();
+        audioChartTimeMs += bufferChartMs;
     }
     else
     {
-        elapsedSamples = 0;
+        audioChartTimeMs = static_cast<double> (-countInTime);
     }
 
     synth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
@@ -141,8 +153,16 @@ void ChartPracticeScene::advanceBarQueue()
         }
     }
 
+    bar.successHistory.push_back (allGreatOrPerfect);
+    barProgressDisplay.setSuccessHistory (barIndex, bar.successHistory);
+
     if (allGreatOrPerfect)
+    {
         bar.learnedScore += 1;
+    } else
+    {
+        bar.learnedScore = 0;
+    }
 
     if (bar.learnedScore >= repsToLearn)
     {
@@ -179,6 +199,16 @@ void ChartPracticeScene::rebuildDisplayEvents()
         displayEvents = std::move (newEvents);
     }
     noteLaneDisplay.setEvents (&displayEvents);
+    if (playQueue.empty())
+    {
+        barProgressDisplay.setCurrentBar (-1);
+        noteLaneDisplay.setHighlightedTimeRange (0, 0);
+    }
+    else
+    {
+        barProgressDisplay.setCurrentBar (playQueue.front());
+        noteLaneDisplay.setHighlightedTimeRange (currentBarStartMs, currentBarStartMs + bars[(size_t) playQueue.front()].lengthMs);
+    }
 }
 
 void ChartPracticeScene::startGame()
@@ -187,7 +217,7 @@ void ChartPracticeScene::startGame()
     playing = true;
     timeMs = -countInTime;
     currentBarStartMs = 0;
-    gameStartTime = juce::Time::currentTimeMillis();
+    clock.start (countInTime);
     grabKeyboardFocus();
 
     unlearnedBarQueue.clear();
@@ -211,7 +241,7 @@ void ChartPracticeScene::update()
 
     if (playing)
     {
-        timeMs = Chart::chartTimeForRealElapsedMs (juce::Time::currentTimeMillis() - gameStartTime, tempoScale, countInTime);
+        timeMs = clock.now();
 
         while (!playQueue.empty() && timeMs - currentBarStartMs >= bars[(size_t) playQueue.front()].lengthMs)
         {
@@ -241,13 +271,16 @@ void ChartPracticeScene::resized()
     auto laneOutline = getLocalBounds().withWidth (std::min (300, getWidth() - 80)).withTrimmedTop (20).withTrimmedBottom (20).withCentre ({ getWidth() / 2, getHeight() / 2 });
     noteLaneDisplay.setBounds (laneOutline);
 
-    constexpr int progressWidth = 60;
-    barProgressDisplay.setBounds (laneOutline.getRight() + 10, laneOutline.getY(), progressWidth, laneOutline.getHeight());
+    auto progressX = laneOutline.getRight() + 10;
+    barProgressDisplay.setBounds (progressX, laneOutline.getY(), std::max (0, getWidth() - 10 - progressX), laneOutline.getHeight());
+
+    constexpr int controlsWidth = 130;
+    playbackControls.setBounds (laneOutline.getX() - 10 - controlsWidth, laneOutline.getY(), controlsWidth, laneOutline.getHeight());
 }
 
 bool ChartPracticeScene::keyPressed (const juce::KeyPress& key)
 {
-    auto hitTime = Chart::chartTimeForRealElapsedMs (juce::Time::currentTimeMillis() - gameStartTime, tempoScale, countInTime);
+    auto hitTime = clock.now();
     auto* closestEvent = noteLaneDisplay.registerKeyPress (key, hitTime);
     if (closestEvent != nullptr)
     {

@@ -28,6 +28,10 @@ public:
     void setNoteOnScreenVelocity (double pixelsPerMs);
     void setPlayheadTimeMs (long long newTimeMs);
 
+    // Notes whose event-map time falls in [startMs, endMs) are drawn filled rather than
+    // outlined. Pass an empty range to highlight nothing.
+    void setHighlightedTimeRange (long long startMs, long long endMs);
+
     // Decays key-hit lighting and ages/removes tolerance labels. Call once per frame.
     void advance (double elapsedMs);
 
@@ -54,6 +58,8 @@ private:
     const std::multimap<long long, ChartEvent*>* events = nullptr;
     double noteOnScreenVelocity = 0.2;
     long long timeMs = 0;
+    long long highlightStartMs = 0;
+    long long highlightEndMs = 0;
 
     juce::OwnedArray<ToleranceLabel> toleranceLabels;
 };

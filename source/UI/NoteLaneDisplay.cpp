@@ -55,6 +55,12 @@ void NoteLaneDisplay::setPlayheadTimeMs (long long newTimeMs)
     timeMs = newTimeMs;
 }
 
+void NoteLaneDisplay::setHighlightedTimeRange (long long startMs, long long endMs)
+{
+    highlightStartMs = startMs;
+    highlightEndMs = endMs;
+}
+
 void NoteLaneDisplay::advance (double elapsedMs)
 {
     for (auto& indicator : indicatorLighting)
@@ -170,8 +176,12 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
 
         if (event->type == ChartEvent::NOTE)
         {
+            auto noteRect = lanes[(size_t) event->inputButton].withY (eventYPosition - 3L).withHeight (6);
             g.setColour (juce::Colours::pink);
-            g.drawRect (lanes[(size_t) event->inputButton].withY (eventYPosition - 3L).withHeight (6));
+            if (eventTime >= highlightStartMs && eventTime < highlightEndMs)
+                g.fillRect (noteRect);
+            else
+                g.drawRect (noteRect);
         }
         else if (event->type == ChartEvent::BEAT)
         {

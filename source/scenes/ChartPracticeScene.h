@@ -10,7 +10,9 @@
 #include "../Audio/MetronomeSynth.h"
 #include "../Chart/BarAtom.h"
 #include "../UI/BarProgressDisplay.h"
+#include "../Chart/PlaybackClock.h"
 #include "../UI/NoteLaneDisplay.h"
+#include "../UI/PlaybackControls.h"
 #include "Scene.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 #include <deque>
@@ -56,6 +58,7 @@ private:
     void rebuildDisplayEvents();
 
     juce::TextButton startButton;
+    PlaybackControls playbackControls;
 
     SquareWaveSynth synth;
     SineWaveSynth backgroundSynth;
@@ -74,15 +77,18 @@ private:
 
     bool playing;
     long long timeMs;
-    long long elapsedSamples;
+
+    // Message-thread chart time (playhead, key presses). Re-anchors on tempo changes.
+    PlaybackClock clock;
+    // Audio-thread chart time, advanced each block by the block length times the
+    // clock's current tempo scale.
+    double audioChartTimeMs;
     SceneIDs::SceneID desiredSceneId;
 
     std::queue<ChartEvent*> playbackQueue;
     juce::CriticalSection playbackLock;
 
-    long long gameStartTime;
     long long countInTime;
-    double tempoScale;
 
     double sampleRate;
 };

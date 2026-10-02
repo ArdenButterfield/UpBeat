@@ -8,7 +8,9 @@
 #include "../Audio/SineWaveSynth.h"
 #include "../Audio/SquareWaveSynth.h"
 #include "../Audio/MetronomeSynth.h"
+#include "../Chart/PlaybackClock.h"
 #include "../UI/NoteLaneDisplay.h"
+#include "../UI/PlaybackControls.h"
 #include "Scene.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
@@ -24,10 +26,7 @@ public:
     SceneIDs::SceneID getSceneID() const override;
 private:
     juce::TextButton startButton;
-    juce::Slider tempoScaleSlider;
-    juce::Label tempoScaleLabel;
-    juce::Slider noteVelocitySlider;
-    juce::Label noteVelocityLabel;
+    PlaybackControls playbackControls;
 
     SquareWaveSynth synth;
     SineWaveSynth backgroundSynth;
@@ -43,15 +42,18 @@ private:
     bool keyPressed (const juce::KeyPress& key) override;
     bool playing;
     long long timeMs;
-    long long elapsedSamples;
+
+    // Message-thread chart time (playhead, key presses). Re-anchors on tempo changes.
+    PlaybackClock clock;
+    // Audio-thread chart time, advanced each block by the block length times the
+    // clock's current tempo scale.
+    double audioChartTimeMs;
     long long lastNoteTimeMs;
     SceneIDs::SceneID desiredSceneId;
 
     std::queue<ChartEvent*> playbackQueue;
 
     juce::CriticalSection playbackLock;
-
-    long long gameStartTime;
 
     // Pointer view of gameState->currentChart->events, built once at game start, that
     // NoteLaneDisplay uses so its display/hit-testing code stays chart-agnostic.

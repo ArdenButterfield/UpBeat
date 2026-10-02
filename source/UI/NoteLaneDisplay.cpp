@@ -8,8 +8,24 @@
 
 namespace
 {
-    // Central row of the keyboard: lane 0 maps to 'a', lane 1 to 's', and so on.
-    constexpr std::array<int, 10> laneKeyCodes = { 65, 83, 68, 70, 71, 72, 74, 75, 76, 59 };
+    // Central row of the keyboard: 'a' 's' 'd' 'f' 'g' 'h' 'j' 'k' 'l' ';'.
+    constexpr std::array<int, 10> homeRowKeyCodes = { 65, 83, 68, 70, 71, 72, 74, 75, 76, 59 };
+
+    // One lane takes the whole home row, two lanes split it between the hands (asdf / jkl;),
+    // and anything wider gets one home-row key per lane, left to right.
+    std::vector<std::vector<int>> keysForLanes (int numLanes)
+    {
+        if (numLanes == 1)
+            return { { homeRowKeyCodes.begin(), homeRowKeyCodes.end() } };
+
+        if (numLanes == 2)
+            return { { 65, 83, 68, 70 }, { 74, 75, 76, 59 } };
+
+        std::vector<std::vector<int>> result ((size_t) numLanes);
+        for (size_t i = 0; i < result.size() && i < homeRowKeyCodes.size(); ++i)
+            result[i] = { homeRowKeyCodes[i] };
+        return result;
+    }
 }
 
 NoteLaneDisplay::NoteLaneDisplay (GameState* gs, int numLanes_) : gameState (gs), numLanes (numLanes_)
@@ -21,9 +37,7 @@ NoteLaneDisplay::NoteLaneDisplay (GameState* gs, int numLanes_) : gameState (gs)
     lanes.resize ((size_t) numLanes);
     buttonIndicators.resize ((size_t) numLanes);
     indicatorLighting.assign ((size_t) numLanes, 0.f);
-    keys.resize ((size_t) numLanes);
-    for (int i = 0; i < numLanes; ++i)
-        keys[(size_t) i] = (i < (int) laneKeyCodes.size()) ? laneKeyCodes[(size_t) i] : -1;
+    keys = keysForLanes (numLanes);
 }
 
 void NoteLaneDisplay::setEvents (const std::multimap<long long, ChartEvent*>* newEvents)
@@ -54,7 +68,7 @@ void NoteLaneDisplay::advance (double elapsedMs)
 
     for (size_t i = 0; i < keys.size(); ++i)
     {
-        if (juce::KeyPress::isKeyCurrentlyDown (keys[i]))
+        if (std::any_of (keys[i].begin(), keys[i].end(), [] (int k) { return juce::KeyPress::isKeyCurrentlyDown (k); }))
             indicatorLighting[i] = 1;
         else if (indicatorLighting[i] > 0.5f)
             indicatorLighting[i] = 0.5f;
@@ -65,7 +79,7 @@ ChartEvent* NoteLaneDisplay::registerKeyPress (const juce::KeyPress& key, long l
 {
     for (size_t i = 0; i < keys.size(); ++i)
     {
-        if (keys[i] == key.getKeyCode())
+        if (std::find (keys[i].begin(), keys[i].end(), key.getKeyCode()) != keys[i].end())
         {
             indicatorLighting[i] = 1;
             return findClosestNoteForHit ((int) i, hitTimeMs);

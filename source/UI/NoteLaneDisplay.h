@@ -49,7 +49,7 @@ private:
     std::vector<juce::Rectangle<int>> lanes;
     std::vector<juce::Rectangle<int>> buttonIndicators;
     std::vector<float> indicatorLighting;
-    std::vector<int> keys;
+    std::vector<std::vector<int>> keys; // key codes accepted by each lane
 
     const std::multimap<long long, ChartEvent*>* events = nullptr;
     double noteOnScreenVelocity = 0.2;

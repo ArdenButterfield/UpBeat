@@ -10,7 +10,7 @@ Scene::Scene(GameState* gs) : gameState (gs)
 Scene::~Scene()
 {
 }
-void Scene::prepareToPlay (double sampleRate, int samplesPerBlock)
+void Scene::prepareToPlay (double, int)
 {
 }
 void Scene::processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&)

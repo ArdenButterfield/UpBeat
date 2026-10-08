@@ -104,3 +104,9 @@ if(MSVC)
 else()
     set_property(SOURCE ${OdinSourceFiles} APPEND PROPERTY COMPILE_OPTIONS "-w")
 endif()
+
+# Odin's AudioValueTree.h builds its ParameterLayout from ~260 parameters in one call, which
+# JUCE expands as a fold expression deeper than Clang's default nesting limit of 256.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set_property(SOURCE ${OdinSourceFiles} APPEND PROPERTY COMPILE_OPTIONS "-fbracket-depth=1024")
+endif()

@@ -118,6 +118,9 @@ target_sources(SharedCode INTERFACE ${SourceFiles})
 # Adds a BinaryData target for embedding assets into the binary
 include(Assets)
 
+# Compiles the Odin2 synth (modules/odin2) into SharedCode, used by source/Audio/OdinSynth
+include("${CMAKE_CURRENT_SOURCE_DIR}/modules/odin2_integration/Odin2.cmake")
+
 # BinaryData flattens every embedded file into one namespace, discarding folder structure
 # and colliding same-named files from different folders (e.g. default_charts/midi/hello.mid
 # vs default_charts/musicxml/hello.mxl). To preserve BundledResources/'s directory structure,

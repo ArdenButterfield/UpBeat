@@ -14,3 +14,6 @@
 	path = modules/clap-juce-extensions
 	url = https://github.com/free-audio/clap-juce-extensions.git
 	branch = main
+[submodule "modules/odin2"]
+	path = modules/odin2
+	url = https://github.com/TheWaveWarden/odin2.git

@@ -5,8 +5,7 @@
 #ifndef UPBEAT_CHARTPERFORMANCESCENE_H
 #define UPBEAT_CHARTPERFORMANCESCENE_H
 
-#include "../Audio/SineWaveSynth.h"
-#include "../Audio/SquareWaveSynth.h"
+#include "../Audio/OdinSynth.h"
 #include "../Audio/MetronomeSynth.h"
 #include "../Chart/PlaybackClock.h"
 #include "../UI/NoteLaneDisplay.h"
@@ -28,8 +27,8 @@ private:
     juce::TextButton startButton;
     PlaybackControls playbackControls;
 
-    SquareWaveSynth synth;
-    SineWaveSynth backgroundSynth;
+    OdinSynth synth;
+    OdinSynth backgroundSynth;
     MetronomeSynth metronomeSynth;
 
     NoteLaneDisplay noteLaneDisplay;
@@ -40,6 +39,8 @@ private:
     void resized() override;
     void startGame();
     bool keyPressed (const juce::KeyPress& key) override;
+    // How long a synth should hold event's note, in real (tempo-scaled) seconds.
+    double noteDurationSeconds (const ChartEvent& event) const;
     bool playing;
     long long timeMs;
 

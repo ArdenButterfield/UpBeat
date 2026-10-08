@@ -5,8 +5,7 @@
 #ifndef UPBEAT_CHARTPRACTICESCENE_H
 #define UPBEAT_CHARTPRACTICESCENE_H
 
-#include "../Audio/SineWaveSynth.h"
-#include "../Audio/SquareWaveSynth.h"
+#include "../Audio/OdinSynth.h"
 #include "../Audio/MetronomeSynth.h"
 #include "../Chart/BarAtom.h"
 #include "../UI/BarProgressDisplay.h"
@@ -45,6 +44,9 @@ private:
     void startGame();
     bool keyPressed (const juce::KeyPress& key) override;
 
+    // How long a synth should hold event's note, in real (tempo-scaled) seconds.
+    double noteDurationSeconds (const ChartEvent& event) const;
+
     // Moves barIndex to the back of the playQueue and seeds a fresh performance-timing
     // slot on each of its notes for the upcoming rep.
     void enqueueBar (int barIndex);
@@ -60,8 +62,8 @@ private:
     juce::TextButton startButton;
     PlaybackControls playbackControls;
 
-    SquareWaveSynth synth;
-    SineWaveSynth backgroundSynth;
+    OdinSynth synth;
+    OdinSynth backgroundSynth;
     MetronomeSynth metronomeSynth;
 
     NoteLaneDisplay noteLaneDisplay;

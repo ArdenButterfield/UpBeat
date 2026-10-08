@@ -6,6 +6,7 @@
 #define UPBEAT_ODINSYNTH_H
 
 #include "juce_audio_basics/juce_audio_basics.h"
+#include "juce_data_structures/juce_data_structures.h"
 #include <array>
 #include <memory>
 
@@ -30,6 +31,16 @@ public:
     void renderNextBlock (juce::AudioBuffer<float>& buffer, int startSample, int numSamples);
 
     void setOutputGain (float newGain) { outputGain = newGain; }
+
+    // Loads a patch saved by Odin (the contents of a .odin file), replacing the current sound.
+    // Returns false, leaving the current patch untouched, if the data isn't an Odin patch or
+    // was saved by a newer version of Odin than we bundle. Allocates, so call it from the
+    // message thread while audio isn't being rendered.
+    bool loadPreset (const juce::MemoryBlock& odinFileData);
+    bool loadPreset (const juce::File& odinFile);
+
+    // The current patch, in the same form a .odin file stores it.
+    juce::ValueTree getPreset() const;
 
 private:
     struct PendingNoteOff

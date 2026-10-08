@@ -3,9 +3,14 @@
 //
 
 #include "ChartPerformanceScene.h"
+#include "../BundledResources.h"
 
 ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale, gs->currentChart->noteOnScreenVelocity), noteLaneDisplay (gs, gs->currentChart->numLanes), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
+    // Only the player's synth gets the preset; backgroundSynth keeps Odin's default patch.
+    [[maybe_unused]] const bool presetLoaded = synth.loadPreset (BundledResources::loadFile ("odin_presets/test_preset.odin"));
+    jassert (presetLoaded);
+
     addAndMakeVisible (startButton);
     startButton.addListener (this);
 

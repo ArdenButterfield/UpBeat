@@ -33,6 +33,52 @@ void OdinSynth::prepareToPlay (double newSampleRate, int maximumBlockSize)
     processor->prepareToPlay (newSampleRate, maximumBlockSize);
 }
 
+bool OdinSynth::loadPreset (const juce::MemoryBlock& odinFileData)
+{
+    auto preset = juce::ValueTree::readFromData (odinFileData.getData(), odinFileData.getSize());
+    if (! preset.hasType ("Odin"))
+        return false;
+
+    // Odin can't read patches from newer versions, and would put up an alert window if asked to.
+    int patchMigrationVersion = preset.getChildWithName ("misc")["patch_migration_version"];
+    if (patchMigrationVersion > ODIN_PATCH_MIGRATION_VERSION)
+        return false;
+
+    // Go through setStateInformation rather than readPatch directly: on top of readPatch's
+    // migration it rebuilds the drawn wavetables and stamps the current version onto the patch.
+    auto xml = preset.createXml();
+    if (xml == nullptr)
+        return false;
+
+    juce::MemoryBlock state;
+    juce::AudioProcessor::copyXmlToBinary (*xml, state);
+    processor->setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+
+    // Odin's editor normally does this after a load; drop anything still ringing from the old patch.
+    processor->resetAudioEngine();
+    return true;
+}
+
+bool OdinSynth::loadPreset (const juce::File& odinFile)
+{
+    juce::MemoryBlock data;
+    return odinFile.loadFileAsData (data) && loadPreset (data);
+}
+
+juce::ValueTree OdinSynth::getPreset() const
+{
+    juce::MemoryBlock state;
+    processor->getStateInformation (state);
+    auto xml = juce::AudioProcessor::getXmlFromBinary (state.getData(), static_cast<int> (state.getSize()));
+    if (xml == nullptr)
+        return {};
+
+    // getStateInformation adds the tuning alongside the patch; .odin files don't store it.
+    xml->deleteAllChildElementsWithTagName ("tuning_scl");
+    xml->deleteAllChildElementsWithTagName ("tuning_kbm");
+    return juce::ValueTree::fromXml (*xml);
+}
+
 void OdinSynth::noteOn (int midiNote, double durationSeconds)
 {
     auto durationSamples = std::max<juce::int64> (1, static_cast<juce::int64> (durationSeconds * sampleRate));

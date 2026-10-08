@@ -3,6 +3,7 @@
 //
 
 #include "ChartPracticeScene.h"
+#include "../BundledResources.h"
 
 #include <cstdlib>
 
@@ -17,6 +18,10 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
       desiredSceneId (SceneIDs::CHART_PRACTICE_SCENE),
       countInTime (gs->currentChart->countInTime)
 {
+    // Only the player's synth gets the preset; backgroundSynth keeps Odin's default patch.
+    [[maybe_unused]] const bool presetLoaded = synth.loadPreset (BundledResources::loadFile ("odin_presets/test_preset.odin"));
+    jassert (presetLoaded);
+
     addAndMakeVisible (startButton);
     startButton.addListener (this);
 

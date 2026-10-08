@@ -49,9 +49,8 @@ ChartPracticeScene::~ChartPracticeScene()
 void ChartPracticeScene::prepareToPlay (double _sampleRate, int samplesPerBlock)
 {
     sampleRate = _sampleRate;
-    juce::ignoreUnused (samplesPerBlock);
-    synth.prepareToPlay (sampleRate);
-    backgroundSynth.prepareToPlay (sampleRate);
+    synth.prepareToPlay (sampleRate, samplesPerBlock);
+    backgroundSynth.prepareToPlay (sampleRate, samplesPerBlock);
     metronomeSynth.prepareToPlay (sampleRate);
 }
 
@@ -62,9 +61,9 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
     {
         while (!playbackQueue.empty())
         {
-            auto e = playbackQueue.back();
+            auto e = playbackQueue.front();
             playbackQueue.pop();
-            synth.noteOn (e->midiNote);
+            synth.noteOn (e->midiNote, noteDurationSeconds (*e));
         }
     }
 
@@ -81,7 +80,7 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
             {
                 if (event->second->type == ChartEvent::NOTE)
                 {
-                    backgroundSynth.noteOn (event->second->midiNote);
+                    backgroundSynth.noteOn (event->second->midiNote, noteDurationSeconds (*event->second));
                 }
                 else if (event->second->type == ChartEvent::BARLINE)
                 {
@@ -103,6 +102,11 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
     synth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
     backgroundSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
     metronomeSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+}
+
+double ChartPracticeScene::noteDurationSeconds (const ChartEvent& event) const
+{
+    return static_cast<double> (event.lengthMs) / 1000.0 / clock.getTempoScale();
 }
 
 SceneIDs::SceneID ChartPracticeScene::getDesiredSceneID()

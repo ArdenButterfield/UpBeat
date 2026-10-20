@@ -9,7 +9,7 @@
 ChartPracticeScene::ChartPracticeScene (GameState* gs)
     : Scene (gs),
       startButton ("Start"),
-      playbackControls (gs->currentChart->tempoScale, gs->currentChart->noteOnScreenVelocity),
+      playbackControls (gs->currentChart->tempoScale),
       synths (*gs->currentChart),
       noteLaneDisplay (gs, gs->currentChart->numLanes),
       bars (BarAtom::splitIntoBars (*gs->currentChart)),
@@ -27,14 +27,8 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
         gameState->currentChart->tempoScale = tempoScale;
         clock.setTempoScale (tempoScale);
     };
-    playbackControls.onNoteVelocityChange = [this] (double velocity)
-    {
-        gameState->currentChart->noteOnScreenVelocity = velocity;
-        noteLaneDisplay.setNoteOnScreenVelocity (velocity);
-    };
     addAndMakeVisible (playbackControls);
 
-    noteLaneDisplay.setNoteOnScreenVelocity (gameState->currentChart->noteOnScreenVelocity);
     addAndMakeVisible (noteLaneDisplay);
 
     addAndMakeVisible (barProgressDisplay);
@@ -156,6 +150,7 @@ void ChartPracticeScene::advanceBarQueue()
     playQueue.pop_front();
     auto& bar = bars[(size_t) barIndex];
     currentBarStartMs += bar.lengthMs;
+    ++completedBarCount;
 
     bool allGreatOrPerfect = true;
     for (auto& [t, event] : bar.events)
@@ -204,6 +199,7 @@ void ChartPracticeScene::rebuildDisplayEvents()
 {
     std::multimap<long long, ChartEvent*> newEvents;
     std::vector<QueuedBarSpan> newSpans;
+    std::vector<NoteLaneDisplay::BarSpan> displayBars;
     auto offset = currentBarStartMs;
     for (auto barIndex : playQueue)
     {
@@ -211,6 +207,7 @@ void ChartPracticeScene::rebuildDisplayEvents()
         for (auto& [t, event] : bar.events)
             newEvents.insert ({ t + offset, &event });
         newSpans.push_back ({ offset, bar.chartStartMs, bar.lengthMs });
+        displayBars.push_back ({ offset, bar.lengthMs });
         offset += bar.lengthMs;
     }
 
@@ -220,16 +217,8 @@ void ChartPracticeScene::rebuildDisplayEvents()
         queuedBarSpans = std::move (newSpans);
     }
     noteLaneDisplay.setEvents (&displayEvents);
-    if (playQueue.empty())
-    {
-        barProgressDisplay.setCurrentBar (-1);
-        noteLaneDisplay.setHighlightedTimeRange (0, 0);
-    }
-    else
-    {
-        barProgressDisplay.setCurrentBar (playQueue.front());
-        noteLaneDisplay.setHighlightedTimeRange (currentBarStartMs, currentBarStartMs + bars[(size_t) playQueue.front()].lengthMs);
-    }
+    noteLaneDisplay.setBars (std::move (displayBars), completedBarCount);
+    barProgressDisplay.setCurrentBar (playQueue.empty() ? -1 : playQueue.front());
 }
 
 void ChartPracticeScene::startGame()
@@ -238,6 +227,7 @@ void ChartPracticeScene::startGame()
     playing = true;
     timeMs = -countInTime;
     currentBarStartMs = 0;
+    completedBarCount = 0;
     clock.start (countInTime);
     grabKeyboardFocus();
 
@@ -289,14 +279,14 @@ void ChartPracticeScene::resized()
     grabKeyboardFocus();
     startButton.setBounds (getLocalBounds().withSizeKeepingCentre (200, 40));
 
-    auto laneOutline = getLocalBounds().withWidth (std::min (300, getWidth() - 80)).withTrimmedTop (20).withTrimmedBottom (20).withCentre ({ getWidth() / 2, getHeight() / 2 });
-    noteLaneDisplay.setBounds (laneOutline);
-
-    auto progressX = laneOutline.getRight() + 10;
-    barProgressDisplay.setBounds (progressX, laneOutline.getY(), std::max (0, getWidth() - 10 - progressX), laneOutline.getHeight());
-
-    constexpr int controlsWidth = 130;
-    playbackControls.setBounds (laneOutline.getX() - 10 - controlsWidth, laneOutline.getY(), controlsWidth, laneOutline.getHeight());
+    constexpr int controlsWidth = 70;
+    constexpr int progressWidth = 100;
+    auto bounds = getLocalBounds().reduced (10, 20);
+    playbackControls.setBounds (bounds.removeFromLeft (controlsWidth));
+    bounds.removeFromLeft (10);
+    barProgressDisplay.setBounds (bounds.removeFromRight (progressWidth));
+    bounds.removeFromRight (10);
+    noteLaneDisplay.setBounds (bounds);
 }
 
 bool ChartPracticeScene::keyPressed (const juce::KeyPress& key)

@@ -4,7 +4,9 @@
 
 #include "ChartPerformanceScene.h"
 
-ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale, gs->currentChart->noteOnScreenVelocity), synths (*gs->currentChart), noteLaneDisplay (gs, gs->currentChart->numLanes), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
+#include "../Chart/BarAtom.h"
+
+ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale), synths (*gs->currentChart), noteLaneDisplay (gs, gs->currentChart->numLanes), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
     addAndMakeVisible (startButton);
     startButton.addListener (this);
@@ -15,14 +17,8 @@ ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startBu
         gameState->currentChart->tempoScale = tempoScale;
         clock.setTempoScale (tempoScale);
     };
-    playbackControls.onNoteVelocityChange = [this] (double velocity)
-    {
-        gameState->currentChart->noteOnScreenVelocity = velocity;
-        noteLaneDisplay.setNoteOnScreenVelocity (velocity);
-    };
     addAndMakeVisible (playbackControls);
 
-    noteLaneDisplay.setNoteOnScreenVelocity (gameState->currentChart->noteOnScreenVelocity);
     addAndMakeVisible (noteLaneDisplay);
 
     setWantsKeyboardFocus (true);
@@ -126,6 +122,11 @@ void ChartPerformanceScene::startGame()
         displayEvents.insert ({ event.first, &event.second });
     }
     noteLaneDisplay.setEvents (&displayEvents);
+
+    std::vector<NoteLaneDisplay::BarSpan> barSpans;
+    for (auto& bar : BarAtom::splitIntoBars (*gameState->currentChart))
+        barSpans.push_back ({ bar.chartStartMs, bar.lengthMs });
+    noteLaneDisplay.setBars (std::move (barSpans), 0);
 }
 
 void ChartPerformanceScene::update()
@@ -155,11 +156,11 @@ void ChartPerformanceScene::resized()
 {
     grabKeyboardFocus();
     startButton.setBounds (getLocalBounds().withSizeKeepingCentre (200, 40));
-    auto laneOutline = getLocalBounds().withWidth (std::min(300, getWidth() - 40)).withTrimmedTop (20).withTrimmedBottom (20).withCentre ({getWidth() / 2, getHeight() / 2});
-    noteLaneDisplay.setBounds (laneOutline);
-
-    constexpr int controlsWidth = 130;
-    playbackControls.setBounds (laneOutline.getX() - 10 - controlsWidth, laneOutline.getY(), controlsWidth, laneOutline.getHeight());
+    constexpr int controlsWidth = 70;
+    auto bounds = getLocalBounds().reduced (10, 20);
+    playbackControls.setBounds (bounds.removeFromLeft (controlsWidth));
+    bounds.removeFromLeft (10);
+    noteLaneDisplay.setBounds (bounds);
 }
 
 bool ChartPerformanceScene::keyPressed (const juce::KeyPress& key)

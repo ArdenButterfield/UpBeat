@@ -46,9 +46,6 @@ public:
     // Multiplies real elapsed time when advancing chart playback, letting the player
     // practice at a slower or faster speed than the chart's original tempo.
     double tempoScale = 1.0;
-
-    // Pixels per millisecond that notes travel down the screen during performance.
-    double noteOnScreenVelocity = 0.2;
 };
 
 #endif //UPBEAT_CHART_H

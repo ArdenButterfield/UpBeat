@@ -77,6 +77,8 @@ private:
     std::deque<int> unlearnedBarQueue;
     std::deque<int> playQueue;
     long long currentBarStartMs;
+    // How many bar reps have been played through; decides which display row the next bar fills.
+    int completedBarCount = 0;
 
     std::multimap<long long, ChartEvent*> displayEvents;
 

@@ -7,16 +7,15 @@
 
 #include "juce_gui_basics/juce_gui_basics.h"
 
-// Side-by-side vertical tempo-scale and note-velocity sliders shown to the left of the
-// note lanes in chart performance and practice. They stay usable during playback, and
-// never take keyboard focus so key presses keep reaching the scene's lanes.
+// A vertical tempo-scale slider shown to the left of the note display in chart
+// performance and practice. It stays usable during playback, and never takes keyboard
+// focus so key presses keep reaching the scene's lanes.
 class PlaybackControls : public juce::Component
 {
 public:
-    PlaybackControls (double initialTempoScale, double initialNoteVelocity);
+    explicit PlaybackControls (double initialTempoScale);
 
     std::function<void (double)> onTempoScaleChange;
-    std::function<void (double)> onNoteVelocityChange;
 
     void resized() override;
 
@@ -25,8 +24,6 @@ private:
 
     juce::Slider tempoScaleSlider;
     juce::Label tempoScaleLabel;
-    juce::Slider noteVelocitySlider;
-    juce::Label noteVelocityLabel;
 };
 
 #endif //UPBEAT_PLAYBACKCONTROLS_H

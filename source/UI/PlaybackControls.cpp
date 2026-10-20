@@ -4,7 +4,7 @@
 
 #include "PlaybackControls.h"
 
-PlaybackControls::PlaybackControls (double initialTempoScale, double initialNoteVelocity)
+PlaybackControls::PlaybackControls (double initialTempoScale)
 {
     setWantsKeyboardFocus (false);
     setMouseClickGrabsKeyboardFocus (false);
@@ -16,14 +16,6 @@ PlaybackControls::PlaybackControls (double initialTempoScale, double initialNote
     tempoScaleSlider.onValueChange = [this] {
         if (onTempoScaleChange)
             onTempoScaleChange (tempoScaleSlider.getValue());
-    };
-
-    configureSlider (noteVelocitySlider, noteVelocityLabel, "Velocity");
-    noteVelocitySlider.setRange (0.05, 0.5, 0.01);
-    noteVelocitySlider.setValue (initialNoteVelocity, juce::dontSendNotification);
-    noteVelocitySlider.onValueChange = [this] {
-        if (onNoteVelocityChange)
-            onNoteVelocityChange (noteVelocitySlider.getValue());
     };
 }
 
@@ -45,12 +37,6 @@ void PlaybackControls::configureSlider (juce::Slider& slider, juce::Label& label
 void PlaybackControls::resized()
 {
     auto bounds = getLocalBounds();
-    auto columnWidth = bounds.getWidth() / 2;
-
-    auto tempoColumn = bounds.removeFromLeft (columnWidth);
-    tempoScaleLabel.setBounds (tempoColumn.removeFromTop (20));
-    tempoScaleSlider.setBounds (tempoColumn);
-
-    noteVelocityLabel.setBounds (bounds.removeFromTop (20));
-    noteVelocitySlider.setBounds (bounds);
+    tempoScaleLabel.setBounds (bounds.removeFromTop (20));
+    tempoScaleSlider.setBounds (bounds);
 }

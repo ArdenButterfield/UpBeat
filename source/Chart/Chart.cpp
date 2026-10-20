@@ -4,124 +4,124 @@
 
 #include "Chart.h"
 
-#include "juce_audio_basics/juce_audio_basics.h"
+#include <algorithm>
+#include <cmath>
+#include <yaml-cpp/yaml.h>
 
-std::vector<TrackChannelInfo> Chart::analyzeTrackChannels (const juce::MemoryBlock& midiData)
+namespace
 {
-    juce::MidiFile midiFile;
-    auto inputStream = juce::MemoryInputStream (midiData, false);
-    midiFile.readFrom (inputStream);
-
-    std::map<std::pair<int, int>, int> noteCountByTrackAndChannel;
-    for (int trackIndex = 0; trackIndex < midiFile.getNumTracks(); ++trackIndex)
+    long long secondsToMs (double seconds)
     {
-        auto* track = midiFile.getTrack (trackIndex);
-        for (int i = 0; i < track->getNumEvents(); ++i)
-        {
-            auto& message = track->getEventPointer (i)->message;
-            if (message.isNoteOn())
-                noteCountByTrackAndChannel[{ trackIndex, message.getChannel() }] += 1;
-        }
+        return std::llround (seconds * 1000.0);
     }
 
-    std::vector<TrackChannelInfo> result;
-    for (auto& [trackAndChannel, count] : noteCountByTrackAndChannel)
-        result.push_back ({ trackAndChannel.first, trackAndChannel.second, count });
-
-    return result;
-}
-
-Chart::Chart (const juce::MemoryBlock& _midiData, const juce::String& _name, const std::vector<std::pair<int, int>>& selectedTrackChannels)
-    : name (_name), midiData (_midiData), numLanes (static_cast<int> (selectedTrackChannels.size()))
-{
-    juce::MidiFile midiFile;
-    auto inputStream = juce::MemoryInputStream(midiData, false);
-    midiFile.readFrom (inputStream);
-
-    midiFile.convertTimestampTicksToSeconds();
-
-    // Must be found after convertTimestampTicksToSeconds(), so that their timestamps are in seconds
-    // rather than ticks, matching the note events below.
-    juce::MidiMessageSequence tempoChangeEvents, timeSigEvents;
-    midiFile.findAllTempoEvents (tempoChangeEvents);
-    midiFile.findAllTimeSigEvents (timeSigEvents);
-
-    std::map<std::pair<int, int>, int> laneByTrackAndChannel;
-    for (size_t lane = 0; lane < selectedTrackChannels.size(); ++lane)
-        laneByTrackAndChannel[selectedTrackChannels[lane]] = static_cast<int> (lane);
-
-    for (int trackIndex = 0; trackIndex < midiFile.getNumTracks(); ++trackIndex)
+    juce::String toJuceString (const YAML::Node& node)
     {
-        auto* track = midiFile.getTrack (trackIndex);
-        for (int i = 0; i < track->getNumEvents(); ++i)
-        {
-            auto event = track->getEventPointer (i);
-
-            if (event->message.isNoteOn ())
-            {
-                auto laneIt = laneByTrackAndChannel.find ({ trackIndex, event->message.getChannel() });
-                auto lane = (laneIt != laneByTrackAndChannel.end()) ? laneIt->second : -1;
-                auto chartEvent = ChartEvent (event, lane);
-                events.insert ({chartEvent.timeMs, std::move(chartEvent)});
-            }
-        }
+        return juce::String::fromUTF8 (node.as<std::string> (std::string()).c_str());
     }
 
-    if (tempoChangeEvents.getNumEvents() > 0 && timeSigEvents.getNumEvents() > 0)
+    juce::MemoryBlock decodeBase64 (const juce::String& base64)
     {
-        double secondsPerQuarterNote = 0.5; // default 120 BPM, per the MIDI spec
-        int timeSigNumerator = 4;
-        int timeSigDenominator = 4; // default 4/4, per the MIDI spec
-
-        int tempoIndex = 0;
-        int timeSigIndex = 0;
-        int beatInBar = 0;
-
-        constexpr double epsilonSeconds = 1.0e-6;
-        const double endTimeSeconds = midiFile.getLastTimestamp();
-
-        for (double t = 0.0; t <= endTimeSeconds;)
-        {
-            bool timeSigChanged = false;
-
-            while (tempoIndex < tempoChangeEvents.getNumEvents()
-                   && tempoChangeEvents.getEventPointer (tempoIndex)->message.getTimeStamp() <= t + epsilonSeconds)
-            {
-                secondsPerQuarterNote = tempoChangeEvents.getEventPointer (tempoIndex)->message.getTempoSecondsPerQuarterNote();
-                ++tempoIndex;
-            }
-
-            while (timeSigIndex < timeSigEvents.getNumEvents()
-                   && timeSigEvents.getEventPointer (timeSigIndex)->message.getTimeStamp() <= t + epsilonSeconds)
-            {
-                timeSigEvents.getEventPointer (timeSigIndex)->message.getTimeSignatureInfo (timeSigNumerator, timeSigDenominator);
-                ++timeSigIndex;
-                timeSigChanged = true;
-            }
-
-            if (timeSigNumerator < 1)
-                timeSigNumerator = 4;
-            if (timeSigDenominator < 1)
-                timeSigDenominator = 4;
-
-            // Realign to the start of a bar whenever the time signature changes.
-            if (timeSigChanged)
-                beatInBar = 0;
-
-            auto type = (beatInBar == 0) ? ChartEvent::BARLINE : ChartEvent::BEAT;
-            auto chartEvent = ChartEvent (static_cast<long long> (t * 1000.0), type);
-            events.insert ({ chartEvent.timeMs, std::move (chartEvent) });
-
-            beatInBar = (beatInBar + 1) % timeSigNumerator;
-
-            const double beatDurationSeconds = secondsPerQuarterNote * 4.0 / static_cast<double> (timeSigDenominator);
-            if (beatDurationSeconds <= 0.0)
-                break;
-
-            t += beatDurationSeconds;
-        }
+        juce::MemoryOutputStream decoded;
+        juce::Base64::convertFromBase64 (decoded, base64);
+        return decoded.getMemoryBlock();
     }
 }
-Chart::~Chart()
+
+std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
 {
+    try
+    {
+        auto root = YAML::Load (yamlText.toStdString());
+        if (! root.IsMap() || ! root["events"].IsSequence())
+            return std::nullopt;
+
+        Chart chart;
+        chart.name = toJuceString (root["title"]);
+
+        std::map<int, int> laneBySynthId;
+        for (const auto& synthNode : root["synths"])
+        {
+            auto group = synthNode["group"].as<std::string> (std::string()) == "PLAYABLE" ? ChartSynth::PLAYABLE : ChartSynth::BACKGROUND;
+            auto& synth = chart.synths.emplace_back (ChartSynth {
+                synthNode["id"].as<int>(),
+                toJuceString (synthNode["name"]),
+                group,
+                decodeBase64 (toJuceString (synthNode["state"])) });
+
+            if (group == ChartSynth::PLAYABLE)
+                laneBySynthId[synth.id] = chart.numLanes++;
+        }
+
+        for (const auto& eventNode : root["events"])
+        {
+            auto type = eventNode["type"].as<std::string> (std::string());
+            auto timeMs = secondsToMs (eventNode["time"].as<double> (0.0));
+
+            if (type == "PlayableNoteEvent" || type == "BackgroundNoteEvent")
+            {
+                auto synthId = eventNode["synth"].as<int> (-1);
+                auto laneIt = laneBySynthId.find (synthId);
+                auto playable = type == "PlayableNoteEvent" && laneIt != laneBySynthId.end();
+
+                ChartEvent event (timeMs, playable ? ChartEvent::NOTE : ChartEvent::BACKGROUND_NOTE);
+                event.lengthMs = secondsToMs (eventNode["length_seconds"].as<double> (0.0));
+                event.midiNote = eventNode["pitch"].as<int> (0);
+                event.velocity = eventNode["velocity"].as<int> (0);
+                event.synthId = synthId;
+                event.inputButton = playable ? laneIt->second : -1;
+                chart.events.insert ({ timeMs, std::move (event) });
+            }
+            else if (type == "BarEvent")
+            {
+                chart.events.insert ({ timeMs, ChartEvent (timeMs, ChartEvent::BARLINE) });
+            }
+            else if (type == "BeatEvent")
+            {
+                // The first beat of each bar is already represented by its BarEvent.
+                if (eventNode["beat"].as<int> (0) != 1)
+                    chart.events.insert ({ timeMs, ChartEvent (timeMs, ChartEvent::BEAT) });
+            }
+            else if (type == "AutomationEvent")
+            {
+                auto synthId = eventNode["synth"].as<int> (-1);
+                auto parameterId = toJuceString (eventNode["parameter"]);
+
+                auto laneIt = std::find_if (chart.automation.begin(), chart.automation.end(), [&] (const AutomationLane& lane) {
+                    return lane.synthId == synthId && lane.parameterId == parameterId;
+                });
+                if (laneIt == chart.automation.end())
+                    laneIt = chart.automation.insert (chart.automation.end(), AutomationLane { synthId, parameterId, {} });
+
+                AutomationPoint point { eventNode["time"].as<double> (0.0) * 1000.0, eventNode["value"].as<double> (0.0) };
+                if (auto curve = eventNode["curve"]; curve && curve.IsSequence() && curve.size() == 4)
+                {
+                    point.hasCurve = true;
+                    for (size_t i = 0; i < 4; ++i)
+                        point.curve[i] = curve[i].as<double>();
+                }
+                laneIt->points.push_back (point);
+            }
+            else if (type == "GUIChangeEvent")
+            {
+                ChartEvent event (timeMs, ChartEvent::GUI_CHANGE);
+                event.guiEventType = toJuceString (eventNode["event_type"]);
+                event.guiValue = toJuceString (eventNode["value"]);
+                chart.events.insert ({ timeMs, std::move (event) });
+            }
+        }
+
+        // Events should already be in time order; stable, so jumps keep their order regardless.
+        for (auto& lane : chart.automation)
+            std::stable_sort (lane.points.begin(), lane.points.end(), [] (const AutomationPoint& a, const AutomationPoint& b) {
+                return a.timeMs < b.timeMs;
+            });
+
+        return chart;
+    }
+    catch (const YAML::Exception& e)
+    {
+        DBG ("Failed to parse chart YAML: " << e.what());
+        return std::nullopt;
+    }
 }

@@ -5,7 +5,7 @@
 #ifndef UPBEAT_CHARTPRACTICESCENE_H
 #define UPBEAT_CHARTPRACTICESCENE_H
 
-#include "../Audio/OdinSynth.h"
+#include "../Audio/ChartSynthBank.h"
 #include "../Audio/MetronomeSynth.h"
 #include "../Chart/BarAtom.h"
 #include "../UI/BarProgressDisplay.h"
@@ -47,6 +47,10 @@ private:
     // How long a synth should hold event's note, in real (tempo-scaled) seconds.
     double noteDurationSeconds (const ChartEvent& event) const;
 
+    // Maps a time on the practice timeline to the original chart's time, via queuedBarSpans.
+    // Call with displayEventsLock held.
+    double chartTimeAt (double practiceTimeMs) const;
+
     // Moves barIndex to the back of the playQueue and seeds a fresh performance-timing
     // slot on each of its notes for the upcoming rep.
     void enqueueBar (int barIndex);
@@ -62,8 +66,8 @@ private:
     juce::TextButton startButton;
     PlaybackControls playbackControls;
 
-    OdinSynth synth;
-    OdinSynth backgroundSynth;
+    // Player hits and background notes both play on the chart synth the note belongs to.
+    ChartSynthBank synths;
     MetronomeSynth metronomeSynth;
 
     NoteLaneDisplay noteLaneDisplay;
@@ -75,6 +79,18 @@ private:
     long long currentBarStartMs;
 
     std::multimap<long long, ChartEvent*> displayEvents;
+
+    // Where each bar in playQueue sits on the practice timeline and in the original chart,
+    // so the audio thread can play the chart's automation for whichever bar is playing.
+    struct QueuedBarSpan
+    {
+        long long startMs;
+        long long chartStartMs;
+        long long lengthMs;
+    };
+    std::vector<QueuedBarSpan> queuedBarSpans;
+
+    // Guards displayEvents and queuedBarSpans.
     juce::CriticalSection displayEventsLock;
 
     bool playing;

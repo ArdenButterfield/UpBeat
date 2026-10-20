@@ -4,37 +4,42 @@
 
 #ifndef UPBEAT_CHART_H
 #define UPBEAT_CHART_H
+#include "Automation.h"
 #include "ChartEvent.h"
 #include "juce_core/juce_core.h"
 #include <map>
-#include <utility>
+#include <optional>
 #include <vector>
 
-// Describes one (track, channel) pair found in a MIDI file, and how many notes it contains.
-struct TrackChannelInfo
+// One Odin2 synth from the chart's Ableton set, in either the PLAYABLE or BACKGROUND group.
+struct ChartSynth
 {
-    int track;
-    int channel;
-    int noteCount;
+    enum Group
+    {
+        PLAYABLE,
+        BACKGROUND
+    };
+
+    int id;
+    juce::String name;
+    Group group;
+    juce::MemoryBlock state; // Odin2 plugin state, decoded from the chart's base64
 };
 
 class Chart
 {
 public:
-    // selectedTrackChannels lists the (track, channel) pairs the user chose to make playable,
-    // in order: the first pair becomes lane 0, the second lane 1, and so on. Every other note
-    // in the file becomes a background note.
-    Chart (const juce::MemoryBlock& midiData, const juce::String& name, const std::vector<std::pair<int, int>>& selectedTrackChannels);
-    ~Chart();
-
-    // Scans a MIDI file and reports the (track, channel) pairs it contains and how many
-    // note-on events are in each, so the UI can offer them to the user for selection.
-    static std::vector<TrackChannelInfo> analyzeTrackChannels (const juce::MemoryBlock& midiData);
+    // Parses a chart in the YAML format described in Ableton Charts/chart_format.md.
+    // Each PLAYABLE synth becomes a lane, in the order the synths are listed: its notes are
+    // the playable notes of that lane. Returns std::nullopt if the data isn't a valid chart.
+    static std::optional<Chart> fromYaml (const juce::String& yamlText);
 
     juce::String name;
-    juce::MemoryBlock midiData;
+    std::vector<ChartSynth> synths;
     std::multimap<long long, ChartEvent> events;
-    int numLanes;
+    // One lane per automated (synth, parameter) pair, built from the chart's AutomationEvents.
+    std::vector<AutomationLane> automation;
+    int numLanes = 0;
 
     long long countInTime = 2000;
 

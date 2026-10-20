@@ -15,8 +15,9 @@
 class BarAtom
 {
 public:
-    BarAtom (long long lengthMs, std::multimap<long long, ChartEvent> events);
+    BarAtom (long long chartStartMs, long long lengthMs, std::multimap<long long, ChartEvent> events);
 
+    long long chartStartMs; // where the bar starts in the original chart
     long long lengthMs;
     int learnedScore = 0;
     std::vector<bool> successHistory; // one entry per practice rep: true if every note was Great or Perfect

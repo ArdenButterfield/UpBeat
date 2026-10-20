@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-BarAtom::BarAtom (long long _lengthMs, std::multimap<long long, ChartEvent> _events)
-    : lengthMs (_lengthMs), events (std::move (_events))
+BarAtom::BarAtom (long long _chartStartMs, long long _lengthMs, std::multimap<long long, ChartEvent> _events)
+    : chartStartMs (_chartStartMs), lengthMs (_lengthMs), events (std::move (_events))
 {
 }
 
@@ -44,7 +44,7 @@ std::vector<BarAtom> BarAtom::splitIntoBars (const Chart& chart)
             barEvents.insert ({ localTime, std::move (event) });
         }
 
-        bars.emplace_back (barEnd - barStart, std::move (barEvents));
+        bars.emplace_back (barStart, barEnd - barStart, std::move (barEvents));
     }
 
     return bars;

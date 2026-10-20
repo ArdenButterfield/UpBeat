@@ -175,6 +175,24 @@ target_compile_definitions(SharedCode
     PRODUCT_NAME_WITHOUT_VERSION="Pamplejuce"
 )
 
+# YAML parsing for chart files (see Ableton Charts/chart_format.md)
+# yaml-cpp 0.8.0 declares cmake_minimum_required(VERSION 3.4), which CMake 4 refuses to
+# configure; raise the policy minimum for it alone. (Older CMakes ignore this variable.)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
+CPMAddPackage(
+    NAME yaml-cpp
+    GITHUB_REPOSITORY jbeder/yaml-cpp
+    GIT_TAG 0.8.0
+    SYSTEM YES
+    OPTIONS
+    "YAML_CPP_BUILD_TESTS OFF"
+    "YAML_CPP_BUILD_TOOLS OFF"
+    "YAML_CPP_BUILD_CONTRIB OFF"
+    "YAML_CPP_INSTALL OFF"
+    "YAML_BUILD_SHARED_LIBS OFF"
+    "YAML_MSVC_SHARED_RT OFF")
+unset(CMAKE_POLICY_VERSION_MINIMUM)
+
 # Link to any other modules you added (with juce_add_module) here!
 # Usually JUCE modules must have PRIVATE visibility
 # See https://github.com/juce-framework/JUCE/blob/master/docs/CMake%20API.md#juce_add_module
@@ -190,6 +208,7 @@ target_link_libraries(SharedCode
     juce_dsp
     juce_gui_basics
     juce_gui_extra
+    yaml-cpp::yaml-cpp
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)

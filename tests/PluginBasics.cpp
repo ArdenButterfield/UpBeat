@@ -6,10 +6,10 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <map>
-#include <set>
 
 TEST_CASE ("one is equal to one", "[dummy]")
 {
@@ -70,58 +70,190 @@ TEST_CASE ("invent6.mid has notes on 2 channels", "[midi]")
 }
 
 
-TEST_CASE ("Chart assigns lanes based on selected track/channel pairs", "[chart]")
+TEST_CASE ("Chart::fromYaml assigns a lane to each PLAYABLE synth", "[chart]")
 {
-    juce::MidiMessageSequence sequence;
-    sequence.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100).withTimeStamp (0));
-    sequence.addEvent (juce::MidiMessage::noteOff (1, 60).withTimeStamp (100));
-    sequence.addEvent (juce::MidiMessage::noteOn (2, 61, (juce::uint8) 100).withTimeStamp (200));
-    sequence.addEvent (juce::MidiMessage::noteOff (2, 61).withTimeStamp (300));
-    sequence.addEvent (juce::MidiMessage::noteOn (5, 62, (juce::uint8) 100).withTimeStamp (400));
-    sequence.addEvent (juce::MidiMessage::noteOff (5, 62).withTimeStamp (500));
-    sequence.updateMatchedPairs();
+    auto yaml = R"(
+title: lanes
+synths:
+- id: 0
+  name: lead
+  group: PLAYABLE
+  state: ""
+- id: 1
+  name: pad
+  group: BACKGROUND
+  state: ""
+- id: 2
+  name: bass
+  group: PLAYABLE
+  state: ""
+events:
+- type: BarEvent
+  time: 0.0
+  bar: 1
+  numerator: 4
+  denominator: 4
+- type: BeatEvent
+  time: 0.0
+  bar: 1
+  beat: 1
+- type: PlayableNoteEvent
+  time: 0.0
+  synth: 0
+  pitch: 60
+  velocity: 100
+  length_seconds: 0.5
+  length_beats: 1.0
+- type: BeatEvent
+  time: 0.5
+  bar: 1
+  beat: 2
+- type: PlayableNoteEvent
+  time: 0.5
+  synth: 2
+  pitch: 36
+  velocity: 90
+  length_seconds: 0.25
+  length_beats: 0.5
+- type: BackgroundNoteEvent
+  time: 0.5
+  synth: 1
+  pitch: 64
+  velocity: 80
+  length_seconds: 1.0
+  length_beats: 2.0
+)";
 
-    juce::MidiFile midiFile;
-    midiFile.setTicksPerQuarterNote (960);
-    midiFile.addTrack (sequence);
+    auto chart = Chart::fromYaml (yaml);
+    REQUIRE (chart.has_value());
 
-    juce::MemoryBlock midiData;
-    juce::MemoryOutputStream outStream (midiData, false);
-    REQUIRE (midiFile.writeTo (outStream));
+    CHECK (chart->name == "lanes");
+    REQUIRE (chart->synths.size() == 3);
+    REQUIRE (chart->numLanes == 2);
 
-    // Only channels 1 and 2 are selected as playable lanes; channel 5 becomes a background note.
-    Chart chart (midiData, "test chart", { { 0, 1 }, { 0, 2 } });
-
-    REQUIRE (chart.numLanes == 2);
-
-    std::map<int, int> countByLane;
-    int backgroundCount = 0;
-    for (auto& [time, event] : chart.events)
+    std::map<int, int> pitchByLane;
+    int backgroundCount = 0, barCount = 0, beatCount = 0;
+    for (auto& [time, event] : chart->events)
     {
+        CHECK (time == event.timeMs);
         if (event.type == ChartEvent::NOTE)
-            countByLane[event.inputButton] += 1;
+            pitchByLane[event.inputButton] = event.midiNote;
         else if (event.type == ChartEvent::BACKGROUND_NOTE)
+        {
             backgroundCount += 1;
+            CHECK (event.inputButton == -1);
+            CHECK (event.lengthMs == 1000);
+        }
+        else if (event.type == ChartEvent::BARLINE)
+            barCount += 1;
+        else if (event.type == ChartEvent::BEAT)
+            beatCount += 1;
     }
 
-    CHECK (countByLane[0] == 1);
-    CHECK (countByLane[1] == 1);
+    CHECK (pitchByLane[0] == 60);
+    CHECK (pitchByLane[1] == 36);
     CHECK (backgroundCount == 1);
+    CHECK (barCount == 1);
+    // The downbeat's BeatEvent is covered by its BarEvent.
+    CHECK (beatCount == 1);
 }
 
-TEST_CASE ("Chart::analyzeTrackChannels reports note counts per track/channel", "[chart]")
+TEST_CASE ("Chart::fromYaml rejects data that isn't a chart", "[chart]")
 {
-    auto invent6Mid = BundledResources::loadFile ("default_charts/midi/invent6.mid");
-    auto trackChannels = Chart::analyzeTrackChannels (invent6Mid);
+    CHECK_FALSE (Chart::fromYaml ("").has_value());
+    CHECK_FALSE (Chart::fromYaml ("just a string").has_value());
+    CHECK_FALSE (Chart::fromYaml ("events: [unclosed").has_value());
+}
 
-    REQUIRE (! trackChannels.empty());
-
-    std::set<std::pair<int, int>> seen;
-    for (auto& info : trackChannels)
+TEST_CASE ("Every bundled YAML chart parses", "[chart]")
+{
+    int chartCount = 0;
+    for (auto& entry : BundledResources::listEntries ("default_charts/yaml"))
     {
-        CHECK (info.noteCount > 0);
-        CHECK (seen.insert ({ info.track, info.channel }).second);
+        INFO (entry);
+        auto chart = Chart::fromYaml (BundledResources::loadFile (entry).toString());
+        REQUIRE (chart.has_value());
+        CHECK (chart->numLanes > 0);
+        for (auto& synth : chart->synths)
+            CHECK (synth.state.getSize() > 0);
+        chartCount += 1;
     }
+
+    CHECK (chartCount > 0);
+}
+
+TEST_CASE ("AutomationLane::valueAt ramps between points", "[chart][automation]")
+{
+    AutomationLane lane { 0, "amp_gain", {} };
+    lane.points.push_back ({ 1000.0, 0.2 });
+    lane.points.push_back ({ 2000.0, 0.6 });
+    // A jump: two points at the same time.
+    lane.points.push_back ({ 3000.0, 0.6 });
+    lane.points.push_back ({ 3000.0, 0.0 });
+    AutomationPoint curved { 4000.0, 0.0 };
+    curved.hasCurve = true;
+    curved.curve = { 0.5, 0.0, 1.0, 0.5 }; // eases in: below the straight line in the middle
+    lane.points.push_back (curved);
+    lane.points.push_back ({ 5000.0, 1.0 });
+
+    using Catch::Matchers::WithinAbs;
+    CHECK_THAT (lane.valueAt (0.0), WithinAbs (0.2, 1e-9)); // held before the first point
+    CHECK_THAT (lane.valueAt (1000.0), WithinAbs (0.2, 1e-9));
+    CHECK_THAT (lane.valueAt (1500.0), WithinAbs (0.4, 1e-9));
+    CHECK_THAT (lane.valueAt (2999.0), WithinAbs (0.6, 1e-9));
+    CHECK_THAT (lane.valueAt (3000.0), WithinAbs (0.0, 1e-9)); // the jump's later point wins
+    CHECK_THAT (lane.valueAt (3500.0), WithinAbs (0.0, 1e-9));
+    CHECK (lane.valueAt (4500.0) < 0.5);
+    CHECK_THAT (lane.valueAt (4999.999), WithinAbs (1.0, 1e-2));
+    CHECK_THAT (lane.valueAt (9000.0), WithinAbs (1.0, 1e-9)); // held after the last point
+}
+
+TEST_CASE ("Chart::fromYaml groups AutomationEvents into lanes", "[chart][automation]")
+{
+    auto chart = Chart::fromYaml (R"(
+title: automation
+synths:
+- id: 0
+  name: lead
+  group: PLAYABLE
+  state: ""
+events:
+- type: AutomationEvent
+  time: 0.0
+  synth: 0
+  parameter: amp_gain
+  value: 0.25
+- type: AutomationEvent
+  time: 0.5
+  synth: 0
+  parameter: fil1_freq
+  value: 0.1
+- type: AutomationEvent
+  time: 1.0
+  synth: 0
+  parameter: amp_gain
+  value: 0.75
+  curve: [0.25, 0.0, 0.75, 1.0]
+- type: AutomationEvent
+  time: 2.0
+  synth: 0
+  parameter: amp_gain
+  value: 1.0
+)");
+    REQUIRE (chart.has_value());
+    REQUIRE (chart->automation.size() == 2);
+
+    auto& gain = chart->automation[0];
+    CHECK (gain.synthId == 0);
+    CHECK (gain.parameterId == "amp_gain");
+    REQUIRE (gain.points.size() == 3);
+    CHECK (gain.points[1].timeMs == 1000.0);
+    CHECK_FALSE (gain.points[0].hasCurve);
+    CHECK (gain.points[1].hasCurve);
+    CHECK (gain.points[1].curve[2] == 0.75);
+    CHECK_THAT (gain.valueAt (500.0), Catch::Matchers::WithinAbs (0.5, 1e-9));
+
+    CHECK (chart->automation[1].parameterId == "fil1_freq");
 }
 
 #ifdef PAMPLEJUCE_IPP

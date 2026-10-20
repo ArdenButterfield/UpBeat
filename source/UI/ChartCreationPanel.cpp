@@ -15,14 +15,16 @@ namespace
 
 ChartCreationPanel::ChartCreationPanel()
 {
-    for (auto& entry : BundledResources::listEntries ("default_charts/midi"))
-        addMidiSource (entry, BundledResources::loadFile (entry));
+    for (auto& entry : BundledResources::listEntries ("default_charts/yaml"))
+        if (entry.endsWithIgnoreCase (".yaml") || entry.endsWithIgnoreCase (".yml"))
+            addChartSource (entry.fromLastOccurrenceOf ("/", false, false).upToLastOccurrenceOf (".", false, false),
+                BundledResources::loadFile (entry).toString());
 
     addAndMakeVisible (uploadButton);
     uploadButton.addListener (this);
 
-    addAndMakeVisible (createButton);
-    createButton.addListener (this);
+    errorLabel.setColour (juce::Label::textColourId, juce::Colours::red);
+    addAndMakeVisible (errorLabel);
 
     addAndMakeVisible (cancelButton);
     cancelButton.addListener (this);
@@ -32,20 +34,20 @@ ChartCreationPanel::~ChartCreationPanel()
 {
 }
 
-void ChartCreationPanel::addMidiSource (const juce::String& name, const juce::MemoryBlock& data)
+void ChartCreationPanel::addChartSource (const juce::String& name, const juce::String& yamlText)
 {
-    auto index = (int) midiSources.size();
-    midiSources.push_back ({ name, data });
+    auto index = (int) chartSources.size();
+    chartSources.push_back ({ name, yamlText });
 
     auto button = std::make_unique<ChartSelectionButton> (name, index);
     addAndMakeVisible (button.get());
     button->addListener (this);
-    midiFileButtons.push_back (std::move (button));
+    chartFileButtons.push_back (std::move (button));
 }
 
 void ChartCreationPanel::openFileBrowser()
 {
-    fileChooser = std::make_unique<juce::FileChooser> ("Select a MIDI file to upload", juce::File(), "*.mid;*.midi");
+    fileChooser = std::make_unique<juce::FileChooser> ("Select a chart file to upload", juce::File(), "*.yaml;*.yml");
 
     fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
         [this] (const juce::FileChooser& chooser)
@@ -54,32 +56,28 @@ void ChartCreationPanel::openFileBrowser()
             if (! file.existsAsFile())
                 return;
 
-            juce::MemoryBlock data;
-            if (file.loadFileAsData (data))
-            {
-                addMidiSource (file.getFileNameWithoutExtension(), data);
-                resized();
-            }
+            addChartSource (file.getFileNameWithoutExtension(), file.loadFileAsString());
+            resized();
         });
 }
 
-void ChartCreationPanel::selectMidiSource (int index)
+void ChartCreationPanel::createChartFromSource (int index)
 {
-    if (index < 0 || index >= (int) midiSources.size())
+    if (index < 0 || index >= (int) chartSources.size() || ! onChartCreated)
         return;
 
-    selectedMidiIndex = index;
-    currentTrackChannels = Chart::analyzeTrackChannels (midiSources[(size_t) index].data);
-
-    trackChannelToggles.clear();
-    for (auto& info : currentTrackChannels)
+    auto& source = chartSources[(size_t) index];
+    auto chart = Chart::fromYaml (source.yamlText);
+    if (! chart.has_value() || chart->numLanes == 0)
     {
-        auto label = "Trk " + juce::String (info.track) + " Ch " + juce::String (info.channel) + ": " + juce::String (info.noteCount) + " notes";
-        auto* toggle = trackChannelToggles.add (new juce::ToggleButton (label));
-        addAndMakeVisible (toggle);
+        errorLabel.setText ("\"" + source.name + "\" is not a valid chart with playable notes", juce::dontSendNotification);
+        return;
     }
 
-    resized();
+    if (chart->name.isEmpty())
+        chart->name = source.name;
+
+    onChartCreated (std::move (*chart));
 }
 
 void ChartCreationPanel::buttonClicked (juce::Button* b)
@@ -90,29 +88,6 @@ void ChartCreationPanel::buttonClicked (juce::Button* b)
         return;
     }
 
-    if (b == &createButton)
-    {
-        if (selectedMidiIndex < 0 || ! onChartCreated)
-            return;
-
-        std::vector<std::pair<int, int>> selectedTrackChannels;
-        for (size_t i = 0; i < currentTrackChannels.size(); ++i)
-        {
-            if (trackChannelToggles[(int) i]->getToggleState())
-            {
-                auto& info = currentTrackChannels[i];
-                selectedTrackChannels.push_back ({ info.track, info.channel });
-            }
-        }
-
-        if (selectedTrackChannels.empty())
-            return;
-
-        auto& source = midiSources[(size_t) selectedMidiIndex];
-        onChartCreated (Chart (source.data, source.name, selectedTrackChannels));
-        return;
-    }
-
     if (b == &cancelButton)
     {
         if (onCancel)
@@ -120,9 +95,9 @@ void ChartCreationPanel::buttonClicked (juce::Button* b)
         return;
     }
 
-    if (auto* midiButton = dynamic_cast<ChartSelectionButton*> (b))
+    if (auto* chartButton = dynamic_cast<ChartSelectionButton*> (b))
     {
-        selectMidiSource (midiButton->index);
+        createChartFromSource (chartButton->index);
     }
 }
 
@@ -132,14 +107,7 @@ void ChartCreationPanel::paint (juce::Graphics& g)
     g.setColour (juce::Colours::white);
     g.setFont (20);
 
-    auto bounds = getLocalBounds().reduced (margin);
-    auto halfWidth = bounds.getWidth() / 2;
-
-    g.drawText ("MIDI Files", bounds.removeFromLeft (halfWidth).withHeight (30), juce::Justification::centred, 1);
-
-    auto rightBounds = getLocalBounds().reduced (margin);
-    rightBounds.removeFromLeft (halfWidth);
-    g.drawText ("Tracks / Channels", rightBounds.withHeight (30), juce::Justification::centred, 1);
+    g.drawText ("Chart Files", getLocalBounds().reduced (margin).withHeight (30), juce::Justification::centred, 1);
 }
 
 void ChartCreationPanel::resized()
@@ -148,25 +116,17 @@ void ChartCreationPanel::resized()
     auto bottomButtons = bounds.removeFromBottom (rowHeight);
     cancelButton.setBounds (bottomButtons.removeFromRight (120));
     bottomButtons.removeFromRight (rowSpacing);
-    createButton.setBounds (bottomButtons.removeFromRight (120));
+    errorLabel.setBounds (bottomButtons);
 
-    auto leftBounds = bounds.removeFromLeft (bounds.getWidth() / 2).withTrimmedTop (30);
-    bounds.removeFromLeft (margin);
-    auto rightBounds = bounds.withTrimmedTop (30);
+    bounds.removeFromBottom (rowSpacing);
+    bounds.removeFromTop (30);
 
-    auto uploadBounds = leftBounds.removeFromBottom (rowHeight);
-    uploadButton.setBounds (uploadBounds);
-    leftBounds.removeFromBottom (rowSpacing);
+    uploadButton.setBounds (bounds.removeFromBottom (rowHeight));
+    bounds.removeFromBottom (rowSpacing);
 
-    for (auto& button : midiFileButtons)
+    for (auto& button : chartFileButtons)
     {
-        button->setBounds (leftBounds.removeFromTop (rowHeight));
-        leftBounds.removeFromTop (rowSpacing);
-    }
-
-    for (auto* toggle : trackChannelToggles)
-    {
-        toggle->setBounds (rightBounds.removeFromTop (rowHeight));
-        rightBounds.removeFromTop (rowSpacing);
+        button->setBounds (bounds.removeFromTop (rowHeight));
+        bounds.removeFromTop (rowSpacing);
     }
 }

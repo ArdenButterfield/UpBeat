@@ -39,20 +39,30 @@ bool OdinSynth::loadPreset (const juce::MemoryBlock& odinFileData)
     if (! preset.hasType ("Odin"))
         return false;
 
-    // Odin can't read patches from newer versions, and would put up an alert window if asked to.
-    int patchMigrationVersion = preset.getChildWithName ("misc")["patch_migration_version"];
-    if (patchMigrationVersion > ODIN_PATCH_MIGRATION_VERSION)
-        return false;
-
-    // Go through setStateInformation rather than readPatch directly: on top of readPatch's
-    // migration it rebuilds the drawn wavetables and stamps the current version onto the patch.
     auto xml = preset.createXml();
     if (xml == nullptr)
         return false;
 
     juce::MemoryBlock state;
     juce::AudioProcessor::copyXmlToBinary (*xml, state);
-    processor->setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+    return loadState (state);
+}
+
+bool OdinSynth::loadState (const juce::MemoryBlock& pluginState)
+{
+    auto xml = juce::AudioProcessor::getXmlFromBinary (pluginState.getData(), static_cast<int> (pluginState.getSize()));
+    if (xml == nullptr || ! xml->hasTagName ("Odin"))
+        return false;
+
+    // Odin can't read patches from newer versions, and would put up an alert window if asked to.
+    auto* misc = xml->getChildByName ("misc");
+    int patchMigrationVersion = misc != nullptr ? misc->getIntAttribute ("patch_migration_version") : 0;
+    if (patchMigrationVersion > ODIN_PATCH_MIGRATION_VERSION)
+        return false;
+
+    // Go through setStateInformation rather than readPatch directly: on top of readPatch's
+    // migration it rebuilds the drawn wavetables and stamps the current version onto the patch.
+    processor->setStateInformation (pluginState.getData(), static_cast<int> (pluginState.getSize()));
 
     // Odin's editor normally does this after a load; drop anything still ringing from the old patch.
     processor->resetAudioEngine();
@@ -63,6 +73,29 @@ bool OdinSynth::loadPreset (const juce::File& odinFile)
 {
     juce::MemoryBlock data;
     return odinFile.loadFileAsData (data) && loadPreset (data);
+}
+
+int OdinSynth::getParameterIndex (const juce::String& parameterId) const
+{
+    auto& parameters = processor->getParameters();
+    for (int i = 0; i < parameters.size(); ++i)
+        if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (parameters[i]))
+            if (withId->paramID == parameterId)
+                return i;
+
+    return -1;
+}
+
+void OdinSynth::setParameterValue (int parameterIndex, float normalisedValue)
+{
+    if (auto* parameter = processor->getParameters()[parameterIndex])
+        parameter->setValueNotifyingHost (normalisedValue);
+}
+
+float OdinSynth::getParameterValue (int parameterIndex) const
+{
+    auto* parameter = processor->getParameters()[parameterIndex];
+    return parameter != nullptr ? parameter->getValue() : 0.0f;
 }
 
 juce::ValueTree OdinSynth::getPreset() const
@@ -79,7 +112,7 @@ juce::ValueTree OdinSynth::getPreset() const
     return juce::ValueTree::fromXml (*xml);
 }
 
-void OdinSynth::noteOn (int midiNote, double durationSeconds)
+void OdinSynth::noteOn (int midiNote, int velocity, double durationSeconds)
 {
     auto durationSamples = std::max<juce::int64> (1, static_cast<juce::int64> (durationSeconds * sampleRate));
 
@@ -100,7 +133,8 @@ void OdinSynth::noteOn (int midiNote, double durationSeconds)
     }
 
     *slot = { true, midiNote, durationSamples };
-    midiBuffer.addEvent (juce::MidiMessage::noteOn (1, midiNote, 0.8f), 0);
+    // A velocity of 0 would be read as a note-off.
+    midiBuffer.addEvent (juce::MidiMessage::noteOn (1, midiNote, static_cast<juce::uint8> (std::clamp (velocity, 1, 127))), 0);
 }
 
 void OdinSynth::renderNextBlock (juce::AudioBuffer<float>& buffer, int startSample, int numSamples)

@@ -3,7 +3,6 @@
 //
 
 #include "ChartPracticeScene.h"
-#include "../BundledResources.h"
 
 #include <cstdlib>
 
@@ -11,6 +10,7 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
     : Scene (gs),
       startButton ("Start"),
       playbackControls (gs->currentChart->tempoScale, gs->currentChart->noteOnScreenVelocity),
+      synths (*gs->currentChart),
       noteLaneDisplay (gs, gs->currentChart->numLanes),
       bars (BarAtom::splitIntoBars (*gs->currentChart)),
       barProgressDisplay (static_cast<int> (bars.size())),
@@ -18,10 +18,6 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
       desiredSceneId (SceneIDs::CHART_PRACTICE_SCENE),
       countInTime (gs->currentChart->countInTime)
 {
-    // Only the player's synth gets the preset; backgroundSynth keeps Odin's default patch.
-    [[maybe_unused]] const bool presetLoaded = synth.loadPreset (BundledResources::loadFile ("odin_presets/test_preset.odin"));
-    jassert (presetLoaded);
-
     addAndMakeVisible (startButton);
     startButton.addListener (this);
 
@@ -54,8 +50,7 @@ ChartPracticeScene::~ChartPracticeScene()
 void ChartPracticeScene::prepareToPlay (double _sampleRate, int samplesPerBlock)
 {
     sampleRate = _sampleRate;
-    synth.prepareToPlay (sampleRate, samplesPerBlock);
-    backgroundSynth.prepareToPlay (sampleRate, samplesPerBlock);
+    synths.prepareToPlay (sampleRate, samplesPerBlock);
     metronomeSynth.prepareToPlay (sampleRate);
 }
 
@@ -68,7 +63,7 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
         {
             auto e = playbackQueue.front();
             playbackQueue.pop();
-            synth.noteOn (e->midiNote, noteDurationSeconds (*e));
+            synths.noteOn (e->synthId, e->midiNote, e->velocity, noteDurationSeconds (*e));
         }
     }
 
@@ -81,11 +76,13 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
         auto displayLock = juce::ScopedTryLock (displayEventsLock);
         if (displayLock.isLocked())
         {
+            synths.applyAutomation (chartTimeAt (audioChartTimeMs));
+
             for (auto event = displayEvents.lower_bound (bufferStartTime); event != displayEvents.end() && event->first < bufferEndTime; ++event)
             {
-                if (event->second->type == ChartEvent::NOTE)
+                if (event->second->type == ChartEvent::BACKGROUND_NOTE)
                 {
-                    backgroundSynth.noteOn (event->second->midiNote, noteDurationSeconds (*event->second));
+                    synths.noteOn (event->second->synthId, event->second->midiNote, event->second->velocity, noteDurationSeconds (*event->second));
                 }
                 else if (event->second->type == ChartEvent::BARLINE)
                 {
@@ -101,12 +98,24 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
     }
     else
     {
+        synths.applyAutomation (static_cast<double> (-countInTime));
         audioChartTimeMs = static_cast<double> (-countInTime);
     }
 
-    synth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
-    backgroundSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+    synths.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
     metronomeSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+}
+
+double ChartPracticeScene::chartTimeAt (double practiceTimeMs) const
+{
+    if (queuedBarSpans.empty())
+        return practiceTimeMs;
+
+    // Times before the first queued bar (the count-in) or after the last run on from that bar.
+    auto span = std::find_if (queuedBarSpans.begin(), queuedBarSpans.end() - 1, [practiceTimeMs] (const QueuedBarSpan& s) {
+        return practiceTimeMs < static_cast<double> (s.startMs + s.lengthMs);
+    });
+    return static_cast<double> (span->chartStartMs) + practiceTimeMs - static_cast<double> (span->startMs);
 }
 
 double ChartPracticeScene::noteDurationSeconds (const ChartEvent& event) const
@@ -194,18 +203,21 @@ void ChartPracticeScene::advanceBarQueue()
 void ChartPracticeScene::rebuildDisplayEvents()
 {
     std::multimap<long long, ChartEvent*> newEvents;
+    std::vector<QueuedBarSpan> newSpans;
     auto offset = currentBarStartMs;
     for (auto barIndex : playQueue)
     {
         auto& bar = bars[(size_t) barIndex];
         for (auto& [t, event] : bar.events)
             newEvents.insert ({ t + offset, &event });
+        newSpans.push_back ({ offset, bar.chartStartMs, bar.lengthMs });
         offset += bar.lengthMs;
     }
 
     {
         juce::ScopedLock lock (displayEventsLock);
         displayEvents = std::move (newEvents);
+        queuedBarSpans = std::move (newSpans);
     }
     noteLaneDisplay.setEvents (&displayEvents);
     if (playQueue.empty())

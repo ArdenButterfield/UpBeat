@@ -3,14 +3,9 @@
 //
 
 #include "ChartPerformanceScene.h"
-#include "../BundledResources.h"
 
-ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale, gs->currentChart->noteOnScreenVelocity), noteLaneDisplay (gs, gs->currentChart->numLanes), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
+ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale, gs->currentChart->noteOnScreenVelocity), synths (*gs->currentChart), noteLaneDisplay (gs, gs->currentChart->numLanes), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
-    // Only the player's synth gets the preset; backgroundSynth keeps Odin's default patch.
-    [[maybe_unused]] const bool presetLoaded = synth.loadPreset (BundledResources::loadFile ("odin_presets/test_preset.odin"));
-    jassert (presetLoaded);
-
     addAndMakeVisible (startButton);
     startButton.addListener (this);
 
@@ -40,8 +35,7 @@ ChartPerformanceScene::~ChartPerformanceScene()
 void ChartPerformanceScene::prepareToPlay (double _sampleRate, int samplesPerBlock)
 {
     sampleRate = _sampleRate;
-    synth.prepareToPlay (sampleRate, samplesPerBlock);
-    backgroundSynth.prepareToPlay (sampleRate, samplesPerBlock);
+    synths.prepareToPlay (sampleRate, samplesPerBlock);
     metronomeSynth.prepareToPlay (sampleRate);
 }
 
@@ -55,10 +49,11 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
         {
             auto e = playbackQueue.front();
             playbackQueue.pop();
-            auto midiNote = e->midiNote;
-            synth.noteOn (midiNote, noteDurationSeconds (*e));
+            synths.noteOn (e->synthId, e->midiNote, e->velocity, noteDurationSeconds (*e));
         }
     }
+
+    synths.applyAutomation (audioChartTimeMs);
 
     if (playing)
     {
@@ -68,10 +63,9 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
 
         for (auto event = gameState->currentChart->events.lower_bound (bufferStartTime); event != gameState->currentChart->events.end() && event->first < bufferEndTime; ++event)
         {
-            if (event->second.type == ChartEvent::NOTE)
+            if (event->second.type == ChartEvent::BACKGROUND_NOTE)
             {
-                std::cout << "background note at note " << event->second.midiNote << "time " << bufferStartTime << std::endl;
-                backgroundSynth.noteOn (event->second.midiNote, noteDurationSeconds (event->second));
+                synths.noteOn (event->second.synthId, event->second.midiNote, event->second.velocity, noteDurationSeconds (event->second));
             } else if (event->second.type == ChartEvent::BARLINE)
             {
                 metronomeSynth.noteOn (MetronomeSynth::BARLINE);
@@ -86,8 +80,7 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
         audioChartTimeMs = static_cast<double> (-gameState->currentChart->countInTime);
     }
 
-    synth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
-    backgroundSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+    synths.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
     metronomeSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
 
 }

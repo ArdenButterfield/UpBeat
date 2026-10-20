@@ -5,7 +5,7 @@
 #ifndef UPBEAT_CHARTPERFORMANCESCENE_H
 #define UPBEAT_CHARTPERFORMANCESCENE_H
 
-#include "../Audio/OdinSynth.h"
+#include "../Audio/ChartSynthBank.h"
 #include "../Audio/MetronomeSynth.h"
 #include "../Chart/PlaybackClock.h"
 #include "../UI/NoteLaneDisplay.h"
@@ -27,8 +27,8 @@ private:
     juce::TextButton startButton;
     PlaybackControls playbackControls;
 
-    OdinSynth synth;
-    OdinSynth backgroundSynth;
+    // Player hits and background notes both play on the chart synth the note belongs to.
+    ChartSynthBank synths;
     MetronomeSynth metronomeSynth;
 
     NoteLaneDisplay noteLaneDisplay;

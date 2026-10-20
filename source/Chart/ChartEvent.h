@@ -4,8 +4,7 @@
 
 #ifndef UPBEAT_CHARTEVENT_H
 #define UPBEAT_CHARTEVENT_H
-#include "Chart.h"
-#include "juce_audio_basics/juce_audio_basics.h"
+#include "juce_core/juce_core.h"
 #include <vector>
 
 struct ChartEvent
@@ -16,20 +15,9 @@ struct ChartEvent
         BARLINE,
         BEAT,
         NOTE,
-        BACKGROUND_NOTE
+        BACKGROUND_NOTE,
+        GUI_CHANGE
     };
-
-    // inputButton is the lane this event should be assigned to, as resolved by the caller
-    // from the chart's selected (track, channel) pairs; -1 means the note is not playable
-    // and becomes a background note.
-    ChartEvent(const juce::MidiMessageSequence::MidiEventHolder* event, int resolvedInputButton)
-    {
-        midiNote = event->message.getNoteNumber();
-        lengthMs = static_cast<long long>(event->noteOffObject->message.getTimeStamp() * 1000 - event->message.getTimeStamp() * 1000);
-        timeMs = static_cast<long long>(event->message.getTimeStamp() * 1000);
-        inputButton = resolvedInputButton;
-        type = (inputButton >= 0) ? NOTE : BACKGROUND_NOTE;
-    }
 
     ChartEvent(long long timeMs, eventType type) : timeMs (timeMs), type (type), lengthMs (0), midiNote (0), inputButton (-1)
     {
@@ -39,7 +27,16 @@ struct ChartEvent
     eventType type;
     long long lengthMs;
     int midiNote;
+    // The lane a NOTE belongs to; -1 for every other event type.
     int inputButton;
+    int velocity = 0;
+    // The id of the chart synth a NOTE or BACKGROUND_NOTE plays on; -1 otherwise.
+    int synthId = -1;
+
+    // GUI_CHANGE: the GUI track name (e.g. "section titles") and the clip name.
+    juce::String guiEventType;
+    juce::String guiValue;
+
     std::vector<long long> performanceTimings;
 };
 

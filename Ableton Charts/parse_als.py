@@ -28,6 +28,12 @@ GUI_GROUP = "GUI"
 
 ODIN_PLUGIN_NAME = "Odin2"
 
+# Ableton's Utility device. On a PLAYABLE track, the panning (Balance) of the
+# first Utility after the Odin synth picks the chart lane of each note.
+UTILITY_DEVICE_TAG = "StereoGain"
+LEFT_LANE = 0
+RIGHT_LANE = 1
+
 # Automation envelopes start with an event at this time, holding the value
 # that applies before the first real breakpoint.
 INITIAL_EVENT_TIME = -63072000
@@ -408,9 +414,24 @@ class Synth:
     parameters: dict[str, tuple[str, str]]
 
 
+def is_odin(device: ET.Element) -> bool:
+    return device.tag == "PluginDevice" and value_of(device, "PluginDesc/Vst3PluginInfo/Name") == ODIN_PLUGIN_NAME
+
+
 def find_odin(track: Track) -> ET.Element | None:
-    for device in track.elem.findall("DeviceChain/DeviceChain/Devices/PluginDevice"):
-        if value_of(device, "PluginDesc/Vst3PluginInfo/Name") == ODIN_PLUGIN_NAME:
+    for device in track.elem.findall("DeviceChain/DeviceChain/Devices/*"):
+        if is_odin(device):
+            return device
+    return None
+
+
+def find_utility_after_odin(track: Track) -> ET.Element | None:
+    """The first Utility device after the track's Odin synth, if any."""
+    after_odin = False
+    for device in track.elem.findall("DeviceChain/DeviceChain/Devices/*"):
+        if is_odin(device):
+            after_odin = True
+        elif after_odin and device.tag == UTILITY_DEVICE_TAG:
             return device
     return None
 
@@ -451,6 +472,55 @@ def parse_synth(index: int, track: Track, group: str) -> Synth | None:
         parameters[target.get("Id")] = (by_hash[vst_id], name)
 
     return Synth(index, track, group, state, parameters)
+
+
+class LaneMap:
+    """Picks the chart lane of a PLAYABLE note from the panning of the Utility
+    device after the track's Odin synth: LEFT_LANE when panned left, RIGHT_LANE
+    when panned right. Centered counts as left. Without a Utility every note is
+    in LEFT_LANE.
+    """
+
+    def __init__(self, track: Track):
+        self.points: list[Breakpoint] = []
+        utility = find_utility_after_odin(track)
+        if utility is None:
+            return
+        balance = utility.find("Balance")
+        target_id = balance.find("AutomationTarget").get("Id")
+        envelope = find_envelopes(track.elem).get(target_id)
+        if envelope is not None:
+            self.points = parse_breakpoints(envelope)
+        else:
+            self.points = [Breakpoint(0.0, float(value_of(balance, "Manual", "0")), None)]
+
+    @property
+    def has_utility(self) -> bool:
+        return bool(self.points)
+
+    def balance(self, beat: float) -> float:
+        """The Utility's balance (-1 left to 1 right) at `beat`.
+
+        At a jump, the value after the jump applies. A small tolerance makes
+        notes that start on a jump use the new value despite rounding.
+        """
+        if not self.points:
+            return 0.0
+        times = [p.time for p in self.points]
+        i = bisect.bisect_right(times, beat + 1e-6) - 1
+        if i < 0:
+            return self.points[0].value
+        a = self.points[i]
+        if i + 1 == len(self.points):
+            return a.value
+        b = self.points[i + 1]
+        x = (beat - a.time) / (b.time - a.time)
+        if a.curve is not None:
+            x = bezier_fraction(a.curve, x)
+        return a.value + (b.value - a.value) * min(max(x, 0.0), 1.0)
+
+    def lane(self, beat: float) -> int:
+        return RIGHT_LANE if self.balance(beat) > 0 else LEFT_LANE
 
 
 def automation_events(synth: Synth, tempo: TempoMap) -> list[dict]:
@@ -507,6 +577,7 @@ def build_chart(path: Path) -> dict:
     synths: list[Synth] = []
     events: list[dict] = []
     end_beat = 0.0
+    num_lanes = 1
 
     for track in tracks:
         if track.kind == "GroupTrack":
@@ -521,19 +592,27 @@ def build_chart(path: Path) -> dict:
             if synth is None:
                 continue
             synths.append(synth)
-            event_type = "PlayableNoteEvent" if group == PLAYABLE_GROUP else "BackgroundNoteEvent"
+            playable = group == PLAYABLE_GROUP
+            lanes = LaneMap(track) if playable else None
+            if lanes is not None and lanes.has_utility:
+                num_lanes = 2
             for clip in clips:
                 for note in clip_notes(clip):
                     start = tempo.seconds(note.start)
-                    events.append({
-                        "type": event_type,
+                    event = {
+                        "type": "PlayableNoteEvent" if playable else "BackgroundNoteEvent",
                         "time": start,
                         "synth": synth.index,
+                    }
+                    if lanes is not None:
+                        event["lane"] = lanes.lane(note.start)
+                    event.update({
                         "pitch": note.pitch,
                         "velocity": note.velocity,
                         "length_seconds": tempo.seconds(note.end) - start,
                         "length_beats": note.end - note.start,
                     })
+                    events.append(event)
             events.extend(automation_events(synth, tempo))
 
         elif group == GUI_GROUP:
@@ -556,6 +635,7 @@ def build_chart(path: Path) -> dict:
 
     return {
         "title": path.stem,
+        "lanes": num_lanes,
         "synths": [
             {
                 "id": s.index,

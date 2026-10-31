@@ -30,8 +30,9 @@ class Chart
 {
 public:
     // Parses a chart in the YAML format described in Ableton Charts/chart_format.md.
-    // Each PLAYABLE synth becomes a lane, in the order the synths are listed: its notes are
-    // the playable notes of that lane. Returns std::nullopt if the data isn't a valid chart.
+    // The notes of PLAYABLE synths are the playable notes; each note's lane comes from its own
+    // "lane" field (default 0), independent of which synth plays it. numLanes is the chart's
+    // "lanes" field, grown to fit every note's lane. Returns std::nullopt if the data isn't a valid chart.
     static std::optional<Chart> fromYaml (const juce::String& yamlText);
 
     juce::String name;

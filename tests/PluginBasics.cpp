@@ -70,10 +70,11 @@ TEST_CASE ("invent6.mid has notes on 2 channels", "[midi]")
 }
 
 
-TEST_CASE ("Chart::fromYaml assigns a lane to each PLAYABLE synth", "[chart]")
+TEST_CASE ("Chart::fromYaml reads note lanes independently of synths", "[chart]")
 {
     auto yaml = R"(
 title: lanes
+lanes: 2
 synths:
 - id: 0
   name: lead
@@ -100,6 +101,7 @@ events:
 - type: PlayableNoteEvent
   time: 0.0
   synth: 0
+  lane: 1
   pitch: 60
   velocity: 100
   length_seconds: 0.5
@@ -111,6 +113,7 @@ events:
 - type: PlayableNoteEvent
   time: 0.5
   synth: 2
+  lane: 0
   pitch: 36
   velocity: 90
   length_seconds: 0.25
@@ -131,13 +134,16 @@ events:
     REQUIRE (chart->synths.size() == 3);
     REQUIRE (chart->numLanes == 2);
 
-    std::map<int, int> pitchByLane;
+    std::map<int, int> pitchByLane, synthByLane;
     int backgroundCount = 0, barCount = 0, beatCount = 0;
     for (auto& [time, event] : chart->events)
     {
         CHECK (time == event.timeMs);
         if (event.type == ChartEvent::NOTE)
+        {
             pitchByLane[event.inputButton] = event.midiNote;
+            synthByLane[event.inputButton] = event.synthId;
+        }
         else if (event.type == ChartEvent::BACKGROUND_NOTE)
         {
             backgroundCount += 1;
@@ -150,12 +156,59 @@ events:
             beatCount += 1;
     }
 
-    CHECK (pitchByLane[0] == 60);
-    CHECK (pitchByLane[1] == 36);
+    CHECK (pitchByLane[1] == 60);
+    CHECK (synthByLane[1] == 0);
+    CHECK (pitchByLane[0] == 36);
+    CHECK (synthByLane[0] == 2);
     CHECK (backgroundCount == 1);
     CHECK (barCount == 1);
     // The downbeat's BeatEvent is covered by its BarEvent.
     CHECK (beatCount == 1);
+}
+
+TEST_CASE ("Chart::fromYaml puts notes without a lane in the first lane", "[chart]")
+{
+    auto yaml = R"(
+title: no lanes
+synths:
+- id: 0
+  name: lead
+  group: PLAYABLE
+  state: ""
+- id: 1
+  name: bass
+  group: PLAYABLE
+  state: ""
+events:
+- type: PlayableNoteEvent
+  time: 0.0
+  synth: 0
+  pitch: 60
+  velocity: 100
+  length_seconds: 0.5
+  length_beats: 1.0
+- type: PlayableNoteEvent
+  time: 0.5
+  synth: 1
+  pitch: 36
+  velocity: 100
+  length_seconds: 0.5
+  length_beats: 1.0
+)";
+
+    auto chart = Chart::fromYaml (yaml);
+    REQUIRE (chart.has_value());
+    CHECK (chart->numLanes == 1);
+
+    int noteCount = 0;
+    for (auto& [time, event] : chart->events)
+    {
+        if (event.type != ChartEvent::NOTE)
+            continue;
+        CHECK (event.inputButton == 0);
+        noteCount += 1;
+    }
+    CHECK (noteCount == 2);
 }
 
 TEST_CASE ("Chart::fromYaml rejects data that isn't a chart", "[chart]")

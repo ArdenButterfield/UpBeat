@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <yaml-cpp/yaml.h>
 
 namespace
@@ -39,7 +40,7 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
         Chart chart;
         chart.name = toJuceString (root["title"]);
 
-        std::map<int, int> laneBySynthId;
+        std::set<int> playableSynthIds;
         for (const auto& synthNode : root["synths"])
         {
             auto group = synthNode["group"].as<std::string> (std::string()) == "PLAYABLE" ? ChartSynth::PLAYABLE : ChartSynth::BACKGROUND;
@@ -50,8 +51,10 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
                 decodeBase64 (toJuceString (synthNode["state"])) });
 
             if (group == ChartSynth::PLAYABLE)
-                laneBySynthId[synth.id] = chart.numLanes++;
+                playableSynthIds.insert (synth.id);
         }
+
+        chart.numLanes = std::max (root["lanes"].as<int> (playableSynthIds.empty() ? 0 : 1), 0);
 
         for (const auto& eventNode : root["events"])
         {
@@ -61,15 +64,17 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
             if (type == "PlayableNoteEvent" || type == "BackgroundNoteEvent")
             {
                 auto synthId = eventNode["synth"].as<int> (-1);
-                auto laneIt = laneBySynthId.find (synthId);
-                auto playable = type == "PlayableNoteEvent" && laneIt != laneBySynthId.end();
+                auto playable = type == "PlayableNoteEvent" && playableSynthIds.contains (synthId);
+                auto lane = playable ? std::max (eventNode["lane"].as<int> (0), 0) : -1;
+                if (playable)
+                    chart.numLanes = std::max (chart.numLanes, lane + 1);
 
                 ChartEvent event (timeMs, playable ? ChartEvent::NOTE : ChartEvent::BACKGROUND_NOTE);
                 event.lengthMs = secondsToMs (eventNode["length_seconds"].as<double> (0.0));
                 event.midiNote = eventNode["pitch"].as<int> (0);
                 event.velocity = eventNode["velocity"].as<int> (0);
                 event.synthId = synthId;
-                event.inputButton = playable ? laneIt->second : -1;
+                event.inputButton = lane;
                 chart.events.insert ({ timeMs, std::move (event) });
             }
             else if (type == "BarEvent")

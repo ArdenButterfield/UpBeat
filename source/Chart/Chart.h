@@ -5,6 +5,7 @@
 #ifndef UPBEAT_CHART_H
 #define UPBEAT_CHART_H
 #include "Automation.h"
+#include "ChartColours.h"
 #include "ChartEvent.h"
 #include "juce_core/juce_core.h"
 #include <map>
@@ -38,6 +39,7 @@ public:
     static std::optional<Chart> fromYaml (const juce::String& yamlText);
 
     static constexpr int MAX_LANES = 2;
+    static_assert (LaneColours::lane1 - LaneColours::lane0 + 1 == MAX_LANES, "Each lane needs its own colour");
 
     juce::String name;
     std::vector<ChartSynth> synths;
@@ -45,6 +47,7 @@ public:
     // One lane per automated (synth, parameter) pair, built from the chart's AutomationEvents.
     std::vector<AutomationLane> automation;
     int numLanes = 0;
+    ChartColours colours;
 
     long long countInTime = 2000;
 

@@ -3,7 +3,8 @@
 
 #include "juce_graphics/juce_graphics.h"
 
-// Every colour the game draws with, owned by GameState.
+// The colours the game draws with, owned by GameState. NoteLaneDisplay's colours belong to
+// each chart instead (see ChartColours).
 struct GameColours
 {
     // Scene and panel backgrounds
@@ -23,18 +24,6 @@ struct GameColours
     juce::Colour barOutline = juce::Colours::lightgrey;
     juce::Colour repSuccess = juce::Colours::green;
     juce::Colour repFailure = juce::Colours::red;
-
-    // NoteLaneDisplay
-    juce::Colour laneRowBackground = juce::Colours::black.withAlpha (0.25f);
-    juce::Colour laneRowOutline = juce::Colours::grey;
-    juce::Colour laneRowActiveOutline = juce::Colours::white;
-    juce::Colour barline = juce::Colours::white.withAlpha (0.3f);
-    juce::Colour beatLine = juce::Colours::white.withAlpha (0.15f);
-    juce::Colour playhead = juce::Colours::white;
-    std::array<juce::Colour, 2> lanePalette {
-        juce::Colours::hotpink,
-        juce::Colours::deepskyblue,
-    };
 
     // LineGraph
     juce::Colour graphBackground = juce::Colours::black;

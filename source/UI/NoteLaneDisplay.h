@@ -48,6 +48,10 @@ public:
 
     void setPlayheadTimeMs (long long newTimeMs);
 
+    // The time on the chart's own timeline, which the chart's colour automation follows. It's
+    // separate from the playhead because the event map may use another timeline (see above).
+    void setChartTimeMs (double newChartTimeMs);
+
     // Decays key-hit lighting and ages/removes tolerance labels. Call once per frame.
     void advance (double elapsedMs);
 
@@ -74,7 +78,6 @@ private:
     // Where a note is drawn: in its own bar's row, or riding the playhead once it has passed.
     std::optional<juce::Point<float>> notePosition (long long eventTime, const ChartEvent& event) const;
     std::optional<juce::Point<float>> playheadPosition() const;
-    juce::Colour laneColour (int lane) const;
 
     GameState* gameState;
     int numLanes;
@@ -88,6 +91,7 @@ private:
     std::vector<BarSpan> bars;
     int firstBarNumber = 0;
     long long timeMs = 0;
+    double chartTimeMs = 0.0;
 
     juce::OwnedArray<ToleranceLabel> toleranceLabels;
 };

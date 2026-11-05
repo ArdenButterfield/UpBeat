@@ -48,7 +48,7 @@ private:
     double noteDurationSeconds (const ChartEvent& event) const;
 
     // Maps a time on the practice timeline to the original chart's time, via queuedBarSpans.
-    // Call with displayEventsLock held.
+    // Call with displayEventsLock held, unless on the message thread, the only one that writes them.
     double chartTimeAt (double practiceTimeMs) const;
 
     // Moves barIndex to the back of the playQueue and seeds a fresh performance-timing

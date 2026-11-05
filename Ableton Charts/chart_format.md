@@ -5,6 +5,11 @@ title: the title of the als file, without the extension
 lanes: the number of chart lanes the player plays on. 2 if any PLAYABLE track has a Utility device after its Odin synth,
 otherwise 1.
 
+colours: only present if a track in the GUI group has the UpBeat Colours plugin (the first one found is used). The
+NoteLaneDisplay colours of this chart, each with its L, a and b values in Oklab, taken from the plugin's parameter values.
+The colours are row_background, row_outline, row_active_outline, barline, beat_line, playhead, lane_0 and lane_1. The game
+uses its default for any colour that is left out.
+
 List of synths to initialize:
 Each track in the PLAYABLE and BACKGROUND group in the ableton set should have an odin2 synth. This list has the plugin
 state of each of these synthesizers.
@@ -29,6 +34,13 @@ There are several types of events, each with its own parameters. In addition, ev
   - Which synth
   - What plugin parameter
   - new value
+- ColourAutomationEvent. This corresponds to an automation event in a parameter of the UpBeat Colours plugin. Between two
+  events of the same colour channel the value ramps linearly in Oklab, or along the bezier curve if the first event has one.
+  Parameters:
+  - Which colour
+  - Which channel (L, a or b)
+  - new value, in Oklab
+  - curve (optional)
 - BeatEvent
   - Occurs at every beat, calculated using tempo and time signature automation in the als file.
 - BarEvent.

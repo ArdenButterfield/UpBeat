@@ -9,8 +9,6 @@
 
 #define UNPLAYED_NOTE (-99999)
 
-static_assert (std::tuple_size_v<decltype (GameColours::lanePalette)> == Chart::MAX_LANES, "Each lane needs its own colour");
-
 struct GameState
 {
     std::vector<Chart> charts;

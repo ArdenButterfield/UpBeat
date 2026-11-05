@@ -15,6 +15,11 @@ namespace
     constexpr int toleranceLabelWidth = 80;
     constexpr int toleranceLabelHeight = 20;
 
+    // Charts set colours in Oklab, with no alpha, so how see-through these are is fixed here.
+    constexpr float rowBackgroundAlpha = 0.25f;
+    constexpr float barlineAlpha = 0.3f;
+    constexpr float beatLineAlpha = 0.15f;
+
     // One lane takes the whole home row; two lanes (Chart::MAX_LANES) split it between the hands (asdf / jkl;).
     std::vector<std::vector<int>> keysForLanes (int numLanes)
     {
@@ -65,6 +70,11 @@ void NoteLaneDisplay::setBars (std::vector<BarSpan> newBars, int newFirstBarNumb
 void NoteLaneDisplay::setPlayheadTimeMs (long long newTimeMs)
 {
     timeMs = newTimeMs;
+}
+
+void NoteLaneDisplay::setChartTimeMs (double newChartTimeMs)
+{
+    chartTimeMs = newChartTimeMs;
 }
 
 void NoteLaneDisplay::advance (double elapsedMs)
@@ -228,22 +238,21 @@ std::optional<juce::Point<float>> NoteLaneDisplay::playheadPosition() const
     return juce::Point<float> (xForTime (*currentBar, timeMs), rows[(size_t) rowForBar (*currentBar)].toFloat().getCentreY());
 }
 
-juce::Colour NoteLaneDisplay::laneColour (int lane) const
-{
-    auto& palette = gameState->colours.lanePalette;
-    return palette[(size_t) std::max (0, lane) % palette.size()];
-}
-
 void NoteLaneDisplay::paint (juce::Graphics& g)
 {
     auto currentBar = playheadBarIndex();
     auto currentRow = currentBar ? rowForBar (*currentBar) : -1;
 
+    const auto palette = gameState->currentChart->colours.paletteAt (chartTimeMs);
+    auto laneColour = [&palette] (int lane) {
+        return palette[(size_t) (LaneColours::lane0 + juce::jlimit (0, Chart::MAX_LANES - 1, lane))];
+    };
+
     for (int i = 0; i < numRows; ++i)
     {
-        g.setColour (gameState->colours.laneRowBackground);
+        g.setColour (palette[LaneColours::rowBackground].withAlpha (rowBackgroundAlpha));
         g.fillRect (rows[(size_t) i]);
-        g.setColour (i == currentRow ? gameState->colours.laneRowActiveOutline : gameState->colours.laneRowOutline);
+        g.setColour (palette[i == currentRow ? LaneColours::rowActiveOutline : LaneColours::rowOutline]);
         g.drawRect (rows[(size_t) i], i == currentRow ? 2 : 1);
     }
 
@@ -279,7 +288,7 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
             auto& [eventTime, event] = *it;
             if (event->type == ChartEvent::BEAT || event->type == ChartEvent::BARLINE)
             {
-                g.setColour (event->type == ChartEvent::BARLINE ? gameState->colours.barline : gameState->colours.beatLine);
+                g.setColour (event->type == ChartEvent::BARLINE ? palette[LaneColours::barline].withAlpha (barlineAlpha) : palette[LaneColours::beatLine].withAlpha (beatLineAlpha));
                 g.drawVerticalLine (juce::roundToInt (xForTime (barIndex, eventTime)), area.getY(), area.getBottom());
             }
         }
@@ -298,7 +307,7 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
     if (barIndexAt (timeMs))
     {
         auto row = rows[(size_t) currentRow].toFloat();
-        g.setColour (gameState->colours.playhead);
+        g.setColour (palette[LaneColours::playhead]);
         g.drawLine (xForTime (*currentBar, timeMs), row.getY(), xForTime (*currentBar, timeMs), row.getBottom(), 2.f);
     }
 }

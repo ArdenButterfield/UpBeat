@@ -216,11 +216,62 @@ target_link_libraries(SharedCode
 # Link the JUCE plugin targets our SharedCode target
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
 
+# UpBeat Colours, a helper plugin for choosing a chart's colours in Ableton (see colour_plugin/).
+# Its code is in a library of its own so that the Tests target can link it too.
+add_library(ColourPluginCode INTERFACE)
+target_sources(ColourPluginCode INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/colour_plugin/ColourPluginProcessor.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/colour_plugin/ColourPluginProcessor.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/colour_plugin/ColourPluginEditor.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/colour_plugin/ColourPluginEditor.h")
+target_include_directories(ColourPluginCode INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/colour_plugin")
+
+juce_add_plugin(UpBeatColours
+    COMPANY_NAME "${COMPANY_NAME}"
+    BUNDLE_ID "com.upbeat.colours"
+    COPY_PLUGIN_AFTER_BUILD TRUE
+    IS_SYNTH TRUE
+    NEEDS_MIDI_INPUT TRUE
+    PLUGIN_MANUFACTURER_CODE Upbt
+    PLUGIN_CODE UPCL
+    FORMATS VST3
+    PRODUCT_NAME "UpBeat Colours")
+
+target_sources(UpBeatColours PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/colour_plugin/ColourPluginEntry.cpp")
+target_compile_features(UpBeatColours PRIVATE cxx_std_23)
+target_compile_definitions(UpBeatColours
+    PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_VST3_CAN_REPLACE_VST2=0)
+target_link_libraries(UpBeatColours
+    PRIVATE
+    ColourPluginCode
+    juce_audio_utils
+    juce_audio_processors
+    juce_gui_basics
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_lto_flags
+    juce::juce_recommended_warning_flags)
+
 # IPP support, comment out to disable
 include(PamplejuceIPP)
 
 # Everything related to the tests target
 include(Tests)
+target_link_libraries(Tests PRIVATE ColourPluginCode)
+target_compile_definitions(Tests PRIVATE UPBEAT_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+
+# The chart parser's tests, which need Python with pyyaml, the same as converting charts does.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if (Python3_Interpreter_FOUND)
+    execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import yaml" RESULT_VARIABLE PYYAML_MISSING OUTPUT_QUIET ERROR_QUIET)
+endif ()
+if (Python3_Interpreter_FOUND AND NOT PYYAML_MISSING)
+    add_test(NAME parse_als_tests COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/Ableton Charts/test_parse_als.py")
+else ()
+    message(WARNING "Not running the parse_als.py tests: they need Python with pyyaml")
+endif ()
 
 # A separate target for Benchmarks (keeps the Tests target fast)
 include(Benchmarks)

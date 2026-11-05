@@ -144,6 +144,7 @@ void ChartPerformanceScene::update()
     }
 
     noteLaneDisplay.setPlayheadTimeMs (timeMs);
+    noteLaneDisplay.setChartTimeMs (static_cast<double> (timeMs));
     noteLaneDisplay.advance (elapsed);
 }
 

@@ -27,6 +27,26 @@ namespace
         juce::Base64::convertFromBase64 (decoded, base64);
         return decoded.getMemoryBlock();
     }
+
+    AutomationPoint readAutomationPoint (const YAML::Node& eventNode)
+    {
+        AutomationPoint point { eventNode["time"].as<double> (0.0) * 1000.0, eventNode["value"].as<double> (0.0) };
+        if (auto curve = eventNode["curve"]; curve && curve.IsSequence() && curve.size() == 4)
+        {
+            point.hasCurve = true;
+            for (size_t i = 0; i < 4; ++i)
+                point.curve[i] = curve[i].as<double>();
+        }
+        return point;
+    }
+
+    // Events should already be in time order; stable, so jumps keep their order regardless.
+    void sortPoints (AutomationLane& lane)
+    {
+        std::stable_sort (lane.points.begin(), lane.points.end(), [] (const AutomationPoint& a, const AutomationPoint& b) {
+            return a.timeMs < b.timeMs;
+        });
+    }
 }
 
 std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
@@ -55,6 +75,20 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
         }
 
         chart.numLanes = std::clamp (root["lanes"].as<int> (playableSynthIds.empty() ? 0 : 1), 0, MAX_LANES);
+
+        if (auto coloursNode = root["colours"]; coloursNode && coloursNode.IsMap())
+        {
+            for (int colour = 0; colour < LaneColours::numColours; ++colour)
+            {
+                auto colourNode = coloursNode[LaneColours::infos[(size_t) colour].id];
+                if (! colourNode || ! colourNode.IsMap())
+                    continue;
+
+                auto& lab = chart.colours.base[(size_t) colour];
+                for (int channel = 0; channel < LaneColours::numChannels; ++channel)
+                    lab[channel] = colourNode[LaneColours::channels[(size_t) channel].name].as<double> (lab[channel]);
+            }
+        }
 
         for (const auto& eventNode : root["events"])
         {
@@ -98,14 +132,14 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
                 if (laneIt == chart.automation.end())
                     laneIt = chart.automation.insert (chart.automation.end(), AutomationLane { synthId, parameterId, {} });
 
-                AutomationPoint point { eventNode["time"].as<double> (0.0) * 1000.0, eventNode["value"].as<double> (0.0) };
-                if (auto curve = eventNode["curve"]; curve && curve.IsSequence() && curve.size() == 4)
-                {
-                    point.hasCurve = true;
-                    for (size_t i = 0; i < 4; ++i)
-                        point.curve[i] = curve[i].as<double>();
-                }
-                laneIt->points.push_back (point);
+                laneIt->points.push_back (readAutomationPoint (eventNode));
+            }
+            else if (type == "ColourAutomationEvent")
+            {
+                auto colour = LaneColours::findColour (eventNode["colour"].as<std::string> (std::string()));
+                auto channel = LaneColours::findChannel (eventNode["channel"].as<std::string> (std::string()));
+                if (colour && channel)
+                    chart.colours.automation[(size_t) *colour][(size_t) *channel].points.push_back (readAutomationPoint (eventNode));
             }
             else if (type == "GUIChangeEvent")
             {
@@ -116,11 +150,11 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
             }
         }
 
-        // Events should already be in time order; stable, so jumps keep their order regardless.
         for (auto& lane : chart.automation)
-            std::stable_sort (lane.points.begin(), lane.points.end(), [] (const AutomationPoint& a, const AutomationPoint& b) {
-                return a.timeMs < b.timeMs;
-            });
+            sortPoints (lane);
+        for (auto& lanes : chart.colours.automation)
+            for (auto& lane : lanes)
+                sortPoints (lane);
 
         return chart;
     }

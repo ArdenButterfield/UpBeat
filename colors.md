@@ -12,3 +12,6 @@ stored in Oklab in the yaml as well, so that linear automation between colours i
 The GUI of this helper plugin should be a grid, with a square for each colour. In each square, have the title of that parameter
 (that is, what it maps to in the game GUI), and three vertical sliders. The background of the square should be the current
 colour of that parameter.
+
+The python parser should look for this plugin on any of the tracks in the GUI group, and add the plugin parameter values
+and automation events to the yaml chart file.

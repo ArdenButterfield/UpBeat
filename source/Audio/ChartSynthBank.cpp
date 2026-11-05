@@ -11,7 +11,9 @@ ChartSynthBank::ChartSynthBank (const Chart& chart)
         auto synth = std::make_unique<OdinSynth>();
         // A synth whose state can't be read still plays, with Odin's default patch.
         if (! synth->loadState (chartSynth.state))
+        {
             DBG ("Couldn't load the Odin state for chart synth " << chartSynth.name);
+        }
 
         synths.push_back ({ chartSynth.id, std::move (synth) });
     }

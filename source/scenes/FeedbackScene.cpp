@@ -4,7 +4,7 @@
 
 #include "FeedbackScene.h"
 
-FeedbackScene::FeedbackScene (GameState* gs) : Scene (gs), desiredSceneId (SceneIDs::CHART_FEEDBACK_SCENE), retryButton ("Retry")
+FeedbackScene::FeedbackScene (GameState* gs) : Scene (gs), desiredSceneId (SceneIDs::CHART_FEEDBACK_SCENE), performanceGraph (gs->colours), retryButton ("Retry")
 {
     addAndMakeVisible (performanceGraph);
     buildPerformanceGraph();
@@ -50,8 +50,8 @@ void FeedbackScene::buildPerformanceGraph()
 
 void FeedbackScene::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colours::black);
-    g.setColour (juce::Colours::white);
+    g.fillAll (gameState->colours.menuBackground);
+    g.setColour (gameState->colours.text);
     g.setFont (24);
 
     auto titleSection = getLocalBounds().withHeight (40);

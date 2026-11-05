@@ -21,3 +21,4 @@ int main (int argc, char* argv[])
 #include "catch2/catch_test_macros.hpp"
 
 #include "Benchmarks.cpp"
+#include "ChartPerformanceSceneBenchmarks.cpp"

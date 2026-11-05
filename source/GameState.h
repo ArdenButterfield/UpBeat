@@ -5,13 +5,17 @@
 #ifndef UPBEAT_GAMESTATE_H
 #define UPBEAT_GAMESTATE_H
 #include "Chart/Chart.h"
+#include "GameColours.h"
 
 #define UNPLAYED_NOTE (-99999)
+
+static_assert (std::tuple_size_v<decltype (GameColours::lanePalette)> == Chart::MAX_LANES, "Each lane needs its own colour");
 
 struct GameState
 {
     std::vector<Chart> charts;
     Chart* currentChart;
+    GameColours colours;
     static constexpr int NUM_TOLERANCE_CATEGORIES = 4;
 
     [[nodiscard]] const std::string* getMessage (long long difference) const

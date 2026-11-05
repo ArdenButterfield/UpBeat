@@ -54,7 +54,7 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
                 playableSynthIds.insert (synth.id);
         }
 
-        chart.numLanes = std::max (root["lanes"].as<int> (playableSynthIds.empty() ? 0 : 1), 0);
+        chart.numLanes = std::clamp (root["lanes"].as<int> (playableSynthIds.empty() ? 0 : 1), 0, MAX_LANES);
 
         for (const auto& eventNode : root["events"])
         {
@@ -65,7 +65,7 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
             {
                 auto synthId = eventNode["synth"].as<int> (-1);
                 auto playable = type == "PlayableNoteEvent" && playableSynthIds.contains (synthId);
-                auto lane = playable ? std::max (eventNode["lane"].as<int> (0), 0) : -1;
+                auto lane = playable ? std::clamp (eventNode["lane"].as<int> (0), 0, MAX_LANES - 1) : -1;
                 if (playable)
                     chart.numLanes = std::max (chart.numLanes, lane + 1);
 
@@ -126,6 +126,7 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
     }
     catch (const YAML::Exception& e)
     {
+        juce::ignoreUnused (e); // DBG compiles away in release builds
         DBG ("Failed to parse chart YAML: " << e.what());
         return std::nullopt;
     }

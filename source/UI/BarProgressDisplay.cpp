@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-BarProgressDisplay::BarProgressDisplay (int numBars)
+BarProgressDisplay::BarProgressDisplay (int numBars, const GameColours& colours_) : colours (colours_)
 {
     setInterceptsMouseClicks (false, false);
     barStates.assign ((size_t) numBars, BarState::NotStarted);
@@ -61,17 +61,17 @@ void BarProgressDisplay::paint (juce::Graphics& g)
         switch (barStates[(size_t) i])
         {
             case BarState::NotStarted:
-                g.setColour (juce::Colours::transparentWhite);
+                g.setColour (colours.barNotStarted);
                 break;
             case BarState::InProgress:
-                g.setColour (juce::Colours::yellow);
+                g.setColour (colours.barInProgress);
                 break;
             case BarState::Learned:
-                g.setColour (juce::Colours::green);
+                g.setColour (colours.barLearned);
                 break;
         }
         g.fillRect (square);
-        g.setColour (juce::Colours::lightgrey);
+        g.setColour (colours.barOutline);
         g.drawRect (square, i == currentBar ? 3 : 1);
 
         // If the history is longer than fits, show only the most recent reps.
@@ -81,7 +81,7 @@ void BarProgressDisplay::paint (juce::Graphics& g)
         {
             auto dotX = dotsStartX + (rep - firstShown) * (dotSize + dotSpacing);
             auto dotY = square.getCentreY() - dotSize / 2;
-            g.setColour (history[(size_t) rep] ? juce::Colours::green : juce::Colours::red);
+            g.setColour (history[(size_t) rep] ? colours.repSuccess : colours.repFailure);
             g.fillEllipse ((float) dotX, (float) dotY, (float) dotSize, (float) dotSize);
         }
     }

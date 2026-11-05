@@ -25,7 +25,7 @@ void ChartSelectionScene::rebuildChartButtons()
     for (int i = 0; i < (int) gameState->charts.size(); ++i)
     {
         auto title = std::make_unique<juce::Label> (juce::String(), gameState->charts[(size_t) i].name);
-        title->setColour (juce::Label::textColourId, juce::Colours::white);
+        title->setColour (juce::Label::textColourId, gameState->colours.text);
         title->setFont (juce::Font (juce::FontOptions (18.0f)));
         addAndMakeVisible (title.get());
         chartTitleLabels.push_back (std::move (title));
@@ -44,7 +44,7 @@ void ChartSelectionScene::rebuildChartButtons()
 
 void ChartSelectionScene::openCreationPanel()
 {
-    creationPanel = std::make_unique<ChartCreationPanel>();
+    creationPanel = std::make_unique<ChartCreationPanel> (gameState->colours);
 
     juce::Component::SafePointer<ChartSelectionScene> safeThis (this);
 
@@ -86,8 +86,8 @@ void ChartSelectionScene::update()
 
 void ChartSelectionScene::paint (juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::black);
-    g.setColour (juce::Colours::white);
+    g.fillAll (gameState->colours.menuBackground);
+    g.setColour (gameState->colours.text);
     g.setFont (24);
     g.drawText ("Your Charts", getLocalBounds().withHeight (40), juce::Justification::centred, 1);
 }

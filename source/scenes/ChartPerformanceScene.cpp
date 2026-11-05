@@ -149,7 +149,7 @@ void ChartPerformanceScene::update()
 
 void ChartPerformanceScene::paint (juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::darkgrey);
+    g.fillAll (gameState->colours.playBackground);
 }
 
 void ChartPerformanceScene::resized()

@@ -13,7 +13,7 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
       synths (*gs->currentChart),
       noteLaneDisplay (gs, gs->currentChart->numLanes),
       bars (BarAtom::splitIntoBars (*gs->currentChart)),
-      barProgressDisplay (static_cast<int> (bars.size())),
+      barProgressDisplay (static_cast<int> (bars.size()), gs->colours),
       playing (false),
       desiredSceneId (SceneIDs::CHART_PRACTICE_SCENE),
       countInTime (gs->currentChart->countInTime)
@@ -271,7 +271,7 @@ void ChartPracticeScene::update()
 
 void ChartPracticeScene::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colours::darkgrey);
+    g.fillAll (gameState->colours.playBackground);
 }
 
 void ChartPracticeScene::resized()

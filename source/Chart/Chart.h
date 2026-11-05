@@ -32,8 +32,12 @@ public:
     // Parses a chart in the YAML format described in Ableton Charts/chart_format.md.
     // The notes of PLAYABLE synths are the playable notes; each note's lane comes from its own
     // "lane" field (default 0), independent of which synth plays it. numLanes is the chart's
-    // "lanes" field, grown to fit every note's lane. Returns std::nullopt if the data isn't a valid chart.
+    // "lanes" field, grown to fit every note's lane. Both are limited to MAX_LANES: a higher lane count
+    // is reduced, and notes in higher lanes move to the last lane. Returns std::nullopt if the data
+    // isn't a valid chart.
     static std::optional<Chart> fromYaml (const juce::String& yamlText);
+
+    static constexpr int MAX_LANES = 2;
 
     juce::String name;
     std::vector<ChartSynth> synths;

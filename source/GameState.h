@@ -27,7 +27,7 @@ struct GameState
         }
         return &toleranceLabels.back();
     }
-    std::array<long long, NUM_TOLERANCE_CATEGORIES> tolerances {100, 200, 400, 800};
+    std::array<long long, NUM_TOLERANCE_CATEGORIES> tolerances {30, 60, 90, 140};
     std::array<std::string, NUM_TOLERANCE_CATEGORIES+1> toleranceLabels {"Perfect", "Great", "Good", "Ok", "Miss"};
 };
 

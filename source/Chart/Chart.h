@@ -39,6 +39,11 @@ public:
     static std::optional<Chart> fromYaml (const juce::String& yamlText);
 
     static constexpr int MAX_LANES = 2;
+
+    // Whether the metronome clicks on this beat (counted from 1) of a bar in this time
+    // signature. Compound time (6/8, 9/8, 12/8) clicks only on the first of each group of
+    // three beats; every other time signature clicks on every beat.
+    static bool metronomeClicksOnBeat (int numerator, int denominator, int beat);
     static_assert (LaneColours::lane1 - LaneColours::lane0 + 1 == MAX_LANES, "Each lane needs its own colour");
 
     juce::String name;

@@ -49,6 +49,12 @@ namespace
     }
 }
 
+bool Chart::metronomeClicksOnBeat (int numerator, int denominator, int beat)
+{
+    auto compound = denominator == 8 && numerator > 3 && numerator % 3 == 0;
+    return ! compound || (beat - 1) % 3 == 0;
+}
+
 std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
 {
     try
@@ -90,6 +96,9 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
             }
         }
 
+        // The time signature of the bar the events are in; each BarEvent comes before its beats.
+        int numerator = 4, denominator = 4;
+
         for (const auto& eventNode : root["events"])
         {
             auto type = eventNode["type"].as<std::string> (std::string());
@@ -114,12 +123,19 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
             else if (type == "BarEvent")
             {
                 chart.events.insert ({ timeMs, ChartEvent (timeMs, ChartEvent::BARLINE) });
+                numerator = eventNode["numerator"].as<int> (4);
+                denominator = eventNode["denominator"].as<int> (4);
             }
             else if (type == "BeatEvent")
             {
                 // The first beat of each bar is already represented by its BarEvent.
-                if (eventNode["beat"].as<int> (0) != 1)
-                    chart.events.insert ({ timeMs, ChartEvent (timeMs, ChartEvent::BEAT) });
+                auto beat = eventNode["beat"].as<int> (0);
+                if (beat != 1)
+                {
+                    ChartEvent event (timeMs, ChartEvent::BEAT);
+                    event.metronomeClick = metronomeClicksOnBeat (numerator, denominator, beat);
+                    chart.events.insert ({ timeMs, std::move (event) });
+                }
             }
             else if (type == "AutomationEvent")
             {

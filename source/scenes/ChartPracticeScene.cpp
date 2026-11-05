@@ -82,7 +82,7 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
                 {
                     metronomeSynth.noteOn (MetronomeSynth::BARLINE);
                 }
-                else if (event->second->type == ChartEvent::BEAT)
+                else if (event->second->type == ChartEvent::BEAT && event->second->metronomeClick)
                 {
                     metronomeSynth.noteOn (MetronomeSynth::BEAT);
                 }

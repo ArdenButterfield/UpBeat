@@ -42,7 +42,7 @@ namespace
             display.setBounds (0, 0, 400, 300);
             display.setChartTimeMs (chartTimeMs);
 
-            juce::Image image (juce::Image::ARGB, 400, 300, true);
+            juce::Image image (juce::Image::ARGB, 400, 300, true, juce::SoftwareImageType());
             juce::Graphics g (image);
             display.paint (g);
             return image;

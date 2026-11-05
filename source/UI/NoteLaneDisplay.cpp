@@ -19,6 +19,7 @@ namespace
     constexpr float rowBackgroundAlpha = 0.25f;
     constexpr float barlineAlpha = 0.3f;
     constexpr float beatLineAlpha = 0.15f;
+    constexpr float laneLineAlpha = 0.5f;
 
     // One lane takes the whole home row; two lanes (Chart::MAX_LANES) split it between the hands (asdf / jkl;).
     std::vector<std::vector<int>> keysForLanes (int numLanes)
@@ -187,25 +188,11 @@ float NoteLaneDisplay::xForTime (size_t barIndex, long long time) const
     return area.getX() + fraction * area.getWidth();
 }
 
-float NoteLaneDisplay::pitchFraction (size_t barIndex, int midiNote) const
+float NoteLaneDisplay::laneY (juce::Rectangle<float> area, int lane) const
 {
-    if (events == nullptr)
-        return 0.5f;
-
-    auto& bar = bars[barIndex];
-    std::vector<int> pitches;
-    for (auto it = events->lower_bound (bar.startMs); it != events->end() && it->first < bar.startMs + bar.lengthMs; ++it)
-        if (it->second->type == ChartEvent::NOTE)
-            pitches.push_back (it->second->midiNote);
-
-    std::sort (pitches.begin(), pitches.end());
-    pitches.erase (std::unique (pitches.begin(), pitches.end()), pitches.end());
-
-    if (pitches.size() <= 1)
-        return 0.5f;
-
-    auto rank = std::lower_bound (pitches.begin(), pitches.end(), midiNote) - pitches.begin();
-    return static_cast<float> (rank) / static_cast<float> (pitches.size() - 1);
+    auto lanes = std::max (1, numLanes);
+    auto fraction = static_cast<float> (juce::jlimit (0, lanes - 1, lane) + 1) / static_cast<float> (lanes + 1);
+    return std::floor (area.getY() + fraction * area.getHeight()) + 0.5f;
 }
 
 std::optional<juce::Point<float>> NoteLaneDisplay::notePosition (long long eventTime, const ChartEvent& event) const
@@ -215,10 +202,8 @@ std::optional<juce::Point<float>> NoteLaneDisplay::notePosition (long long event
     if (!barIndex || !currentBar)
         return std::nullopt;
 
-    auto yFraction = pitchFraction (*barIndex, event.midiNote);
-
     // Once the playhead has passed a note, it rides along with the playhead - into the
-    // next bar's row if need be - keeping the height it had in its own bar.
+    // next bar's row if need be - staying on its lane's line.
     auto drawnBar = eventTime < timeMs ? *currentBar : *barIndex;
     auto drawnTime = eventTime < timeMs ? timeMs : eventTime;
 
@@ -226,7 +211,7 @@ std::optional<juce::Point<float>> NoteLaneDisplay::notePosition (long long event
         return std::nullopt;
 
     auto area = rowInner (rows[(size_t) rowForBar (drawnBar)]);
-    return juce::Point<float> (xForTime (drawnBar, drawnTime), area.getBottom() - yFraction * area.getHeight());
+    return juce::Point<float> (xForTime (drawnBar, drawnTime), laneY (area, event.inputButton));
 }
 
 std::optional<juce::Point<float>> NoteLaneDisplay::playheadPosition() const
@@ -254,6 +239,13 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
         g.fillRect (rows[(size_t) i]);
         g.setColour (palette[i == currentRow ? LaneColours::rowActiveOutline : LaneColours::rowOutline]);
         g.drawRect (rows[(size_t) i], i == currentRow ? 2 : 1);
+
+        auto area = rowInner (rows[(size_t) i]);
+        for (int lane = 0; lane < numLanes; ++lane)
+        {
+            g.setColour (laneColour (lane).withAlpha (laneLineAlpha));
+            g.drawHorizontalLine (static_cast<int> (laneY (area, lane)), area.getX(), area.getRight());
+        }
     }
 
     for (size_t i = 0; i < buttonIndicators.size(); ++i)

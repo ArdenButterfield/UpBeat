@@ -14,8 +14,8 @@
 // The bar-by-bar note display shared by chart performance and chart practice. It shows
 // four bars at once as stacked rows, with a playhead sweeping across the current one;
 // once a bar is complete its row is refilled with the next bar to come, so the rows
-// cycle (bars 1,2,3,4 -> 5,2,3,4 -> 5,6,3,4 ...). Notes are lane-coloured circles placed
-// by their position in the bar (x) and their pitch relative to the bar's other notes (y).
+// cycle (bars 1,2,3,4 -> 5,2,3,4 -> 5,6,3,4 ...). Each row has a horizontal line per lane,
+// and notes are lane-coloured circles on their lane's line, placed by their position in the bar.
 // It also lights up key indicators and resolves key presses to the closest unplayed note
 // in each lane.
 //
@@ -73,8 +73,10 @@ private:
     std::optional<size_t> barIndexAt (long long time) const;
     int rowForBar (size_t barIndex) const;
     float xForTime (size_t barIndex, long long time) const;
-    // 0 for the lowest distinct pitch among the bar's notes, 1 for the highest.
-    float pitchFraction (size_t barIndex, int midiNote) const;
+    // The y of a lane's line within a row's inner area: lanes are spread evenly down the
+    // row, lane 0 at the top. Always the centre of a pixel row, so the line drawn along that
+    // row stays crisp and the notes on it are centred on it.
+    float laneY (juce::Rectangle<float> area, int lane) const;
     // Where a note is drawn: in its own bar's row, or riding the playhead once it has passed.
     std::optional<juce::Point<float>> notePosition (long long eventTime, const ChartEvent& event) const;
     std::optional<juce::Point<float>> playheadPosition() const;

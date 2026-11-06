@@ -25,6 +25,19 @@ struct GameColours
     juce::Colour repSuccess = juce::Colours::green;
     juce::Colour repFailure = juce::Colours::red;
 
+    // TimingHistogram
+    juce::Colour histogramBackground = juce::Colours::black.withAlpha (0.25f);
+    juce::Colour histogramAxis = juce::Colours::white; // The perfect-timing line; category edges are drawn fainter
+    juce::Colour histogramMedian = juce::Colours::white; // The median's dotted line and its label
+    juce::Colour histogramQuartile = juce::Colours::white.withAlpha (0.5f); // The quartiles' dotted lines and labels
+    // One per tolerance category, from Perfect to Ok.
+    std::array<juce::Colour, 4> histogramBars {
+        juce::Colours::limegreen,
+        juce::Colours::deepskyblue,
+        juce::Colours::gold,
+        juce::Colours::orange,
+    };
+
     // LineGraph
     juce::Colour graphBackground = juce::Colours::black;
     juce::Colour graphForeground = juce::Colours::white; // Axes, ticks and tick labels

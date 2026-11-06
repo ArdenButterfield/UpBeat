@@ -8,13 +8,18 @@
 #include "../GameState.h"
 #include "ToleranceLabel.h"
 #include "juce_gui_basics/juce_gui_basics.h"
+#include <functional>
 #include <map>
 #include <optional>
 
 // The bar-by-bar note display shared by chart performance and chart practice. It shows
-// four bars at once as stacked rows, with a playhead sweeping across the current one;
-// once a bar is complete its row is refilled with the next bar to come, so the rows
-// cycle (bars 1,2,3,4 -> 5,2,3,4 -> 5,6,3,4 ...). Each row has a horizontal line per lane,
+// four bars at once in a 2x2 grid of rows (filled left to right, then top to bottom),
+// with a playhead sweeping across the current one. The two rows side by side touch, and
+// share one border and one set of lane lines, like a line of sheet music. The grid line
+// being played and the one after it are shown. Once a whole grid line has been played,
+// it's cleared, and the bars after the next line fade into its place over the first bar
+// of the next line: with bars 1,2 on top and 3,4 below, bars 5,6 fade in on top while
+// bar 3 plays. Each row has a horizontal line per lane,
 // and notes are lane-coloured circles on their lane's line, placed by their position in the bar.
 // It also lights up key indicators and resolves key presses to the closest unplayed note
 // in each lane.
@@ -29,6 +34,8 @@ class NoteLaneDisplay : public juce::Component
 {
 public:
     static constexpr int numRows = 4;
+    static constexpr int gridColumns = 2;
+    static constexpr int gridLines = (numRows + gridColumns - 1) / gridColumns;
 
     // A bar in the event map's time coordinates.
     struct BarSpan
@@ -43,7 +50,8 @@ public:
 
     // newBars must be consecutive and in time order. firstBarNumber counts how many bars
     // came before newBars[0] in the sequence the player has been shown, and decides which
-    // row each bar fills: bar n of the sequence always goes in row n % numRows.
+    // row each bar fills: bar n of the sequence always goes in row n % numRows, and in grid
+    // line n / gridColumns of the sequence.
     void setBars (std::vector<BarSpan> newBars, int firstBarNumber);
 
     void setPlayheadTimeMs (long long newTimeMs);
@@ -60,6 +68,10 @@ public:
     // or nullptr if the key isn't mapped to a lane.
     ChartEvent* registerKeyPress (const juce::KeyPress& key, long long hitTimeMs);
 
+    // Called with each hit's timing error (negative for early) once registerKeyPress has
+    // recorded it on its note.
+    std::function<void (long long timingErrorMs)> onNoteTimed;
+
     void paint (juce::Graphics& g) override;
     void resized() override;
 
@@ -72,11 +84,22 @@ private:
     // The index of the bar containing time, or nullopt if it's outside every bar.
     std::optional<size_t> barIndexAt (long long time) const;
     int rowForBar (size_t barIndex) const;
+    // Which grid line of the sequence a bar is in (see setBars).
+    int sequenceLineForBar (size_t barIndex) const;
+    // How opaque a bar's notes and beat lines are drawn: 1 for the grid line being played
+    // and the one after it (once it has faded in), 0 for bars that aren't shown.
+    float barOpacity (size_t barIndex) const;
     float xForTime (size_t barIndex, long long time) const;
     // The y of a lane's line within a row's inner area: lanes are spread evenly down the
     // row, lane 0 at the top. Always the centre of a pixel row, so the line drawn along that
     // row stays crisp and the notes on it are centred on it.
     float laneY (juce::Rectangle<float> area, int lane) const;
+    // The part of a row notes, beat lines and the playhead are placed within. It's inset from
+    // the border so notes at the very start or end of a line aren't clipped, but not where
+    // the row meets its neighbour, so a line's bars run on from one to the next.
+    juce::Rectangle<float> rowInner (int row) const;
+    // The same for a whole grid line, which its lane lines run along.
+    juce::Rectangle<float> gridLineInner (int gridLine) const;
     // Where a note is drawn: in its own bar's row, or riding the playhead once it has passed.
     std::optional<juce::Point<float>> notePosition (long long eventTime, const ChartEvent& event) const;
     std::optional<juce::Point<float>> playheadPosition() const;
@@ -85,6 +108,7 @@ private:
     int numLanes;
 
     std::array<juce::Rectangle<int>, numRows> rows;
+    std::array<juce::Rectangle<int>, gridLines> gridLineBounds; // the rows of each grid line together
     std::vector<juce::Rectangle<int>> buttonIndicators;
     std::vector<float> indicatorLighting;
     std::vector<std::vector<int>> keys; // key codes accepted by each lane

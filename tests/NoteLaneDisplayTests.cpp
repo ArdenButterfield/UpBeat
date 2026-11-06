@@ -27,13 +27,20 @@ namespace
             events.insert ({ timeMs, &note });
         }
 
-        juce::Image paint()
+        void markPlayed (long long timeMs)
+        {
+            for (auto& note : notes)
+                if (note.timeMs == timeMs)
+                    note.performanceTimings.push_back (0);
+        }
+
+        juce::Image paint (std::vector<NoteLaneDisplay::BarSpan> bars = { { 0, 1000 } }, int firstBarNumber = 0, long long playheadMs = 0)
         {
             NoteLaneDisplay display (&state, lanes);
             display.setBounds (0, 0, 400, 300);
             display.setEvents (&events);
-            display.setBars ({ { 0, 1000 } }, 0);
-            display.setPlayheadTimeMs (0);
+            display.setBars (std::move (bars), firstBarNumber);
+            display.setPlayheadTimeMs (playheadMs);
 
             juce::Image image (juce::Image::ARGB, 400, 300, true, juce::SoftwareImageType());
             juce::Graphics g (image);
@@ -52,13 +59,17 @@ namespace
         std::multimap<long long, ChartEvent*> events;
     };
 
-    // The top row's inner area spans y 14 to 57, and x 14 to 386 for the bar's 1000 ms.
-    constexpr int topRowTop = 5, topRowBottom = 66;
-    constexpr int emptyColumnX = 50;
+    // The top grid line spans x 5 to 395 and y 5 to 134, split between its two rows at x 200.
+    // Its inner area spans y 14 to 125, and the top-left row's x 14 to 200 for the bar's 1000 ms.
+    // The bottom grid line is 135 px down.
+    constexpr int topRowTop = 5, topRowBottom = 134;
+    constexpr int innerTop = 14, innerBottom = 125;
+    // Left of every note the tests place, so only the lines are drawn there.
+    constexpr int emptyColumnX = 25;
 
     int xAtTime (long long timeMs)
     {
-        return juce::roundToInt (14.0f + 372.0f * static_cast<float> (timeMs) / 1000.0f);
+        return juce::roundToInt (14.0f + 186.0f * static_cast<float> (timeMs) / 1000.0f);
     }
 
     bool sameRgb (juce::Colour a, juce::Colour b)
@@ -109,17 +120,17 @@ TEST_CASE ("NoteLaneDisplay draws a horizontal line in each row for each lane", 
 
     SECTION ("spaced evenly down the row")
     {
-        auto top = lane0.front() - 14, middle = lane1.front() - lane0.front(), bottom = 57 - lane1.front();
+        auto top = lane0.front() - innerTop, middle = lane1.front() - lane0.front(), bottom = innerBottom - lane1.front();
         CHECK (std::abs (top - middle) <= 1);
         CHECK (std::abs (middle - bottom) <= 1);
     }
 
     SECTION ("in every row, not just the one being played")
     {
-        for (auto rowOffset : { 67, 134, 201 })
+        for (auto [dx, dy] : { std::pair { 195, 0 }, { 0, 135 }, { 195, 135 } })
         {
-            CHECK (isLinePixel (image.getPixelAt (emptyColumnX, lane0.front() + rowOffset), display.laneColour (0)));
-            CHECK (isLinePixel (image.getPixelAt (emptyColumnX, lane1.front() + rowOffset), display.laneColour (1)));
+            CHECK (isLinePixel (image.getPixelAt (emptyColumnX + dx, lane0.front() + dy), display.laneColour (0)));
+            CHECK (isLinePixel (image.getPixelAt (emptyColumnX + dx, lane1.front() + dy), display.laneColour (1)));
         }
     }
 }
@@ -131,7 +142,7 @@ TEST_CASE ("A one-lane chart has a single line across the middle of each row", "
 
     auto lane0 = lineYs (image, emptyColumnX, display.laneColour (0));
     REQUIRE (lane0.size() == 1);
-    CHECK (std::abs (lane0.front() - (14 + 57) / 2) <= 1);
+    CHECK (std::abs (lane0.front() - (innerTop + innerBottom) / 2) <= 1);
     CHECK (lineYs (image, emptyColumnX, display.laneColour (1)).empty());
 }
 
@@ -144,11 +155,194 @@ TEST_CASE ("Notes sit on their lane's line whatever their pitch", "[ui][lanes]")
     display.addNote (875, 1, 20);
     auto image = display.paint();
 
-    auto lane0Line = (float) lineYs (image, emptyColumnX, display.laneColour (0)).front();
-    auto lane1Line = (float) lineYs (image, emptyColumnX, display.laneColour (1)).front();
+    auto lane0Lines = lineYs (image, emptyColumnX, display.laneColour (0));
+    auto lane1Lines = lineYs (image, emptyColumnX, display.laneColour (1));
+    REQUIRE (lane0Lines.size() == 1);
+    REQUIRE (lane1Lines.size() == 1);
+    auto lane0Line = (float) lane0Lines.front();
+    auto lane1Line = (float) lane1Lines.front();
 
     CHECK (noteCentreY (image, xAtTime (250), display.laneColour (0)) == lane0Line);
     CHECK (noteCentreY (image, xAtTime (500), display.laneColour (0)) == lane0Line);
     CHECK (noteCentreY (image, xAtTime (750), display.laneColour (1)) == lane1Line);
     CHECK (noteCentreY (image, xAtTime (875), display.laneColour (1)) == lane1Line);
+}
+
+TEST_CASE ("NoteLaneDisplay lays its four rows out in a 2x2 grid", "[ui][lanes]")
+{
+    OneBarDisplay display (2);
+    auto image = display.paint();
+    auto lane0Lines = lineYs (image, emptyColumnX, display.laneColour (0));
+    REQUIRE (lane0Lines.size() == 1);
+    auto lane0 = lane0Lines.front();
+
+    // The playing bar's grid line (the top one) has the thicker current-row outline, around
+    // both of its bars; the bottom one has the plain outline.
+    auto pixel = [&image] (int x, int y) { return image.getPixelAt (x, y); };
+    for (auto x : { 5, 6, 393, 394 })
+        CHECK (pixel (x, 20) == juce::Colours::white);
+    CHECK (pixel (5, 155) == juce::Colours::grey);
+    CHECK (pixel (394, 155) == juce::Colours::grey);
+
+    // There's no gap or border where the two bars side by side meet, just the row background.
+    for (auto x : { 198, 199, 200, 201, 202 })
+    {
+        CHECK (std::abs (pixel (x, 20).getAlpha() - 64) <= 1);
+        CHECK (pixel (x, 20).getRed() == 0);
+    }
+
+    // Their lane lines run straight on from one bar into the next.
+    for (auto x : { 190, 199, 200, 201, 210 })
+        CHECK (isLinePixel (pixel (x, lane0), display.laneColour (0)));
+
+    // The grid lines above and below still have a gap between them.
+    CHECK (pixel (emptyColumnX, 137).getAlpha() == 0);
+}
+
+TEST_CASE ("Notes keep their place in the bar on either side of a grid line", "[ui][lanes]")
+{
+    OneBarDisplay display (2);
+    display.addNote (0, 0, 60);
+    auto image = display.paint();
+
+    // A note at the very start of the first bar sits inside the border, not on it. (The
+    // playhead runs through its middle, so it's checked a little to the right.)
+    auto lane0Lines = lineYs (image, emptyColumnX, display.laneColour (0));
+    REQUIRE (lane0Lines.size() == 1);
+    CHECK (noteCentreY (image, xAtTime (0) + 4, display.laneColour (0)) == (float) lane0Lines.front());
+    CHECK (image.getPixelAt (5, lane0Lines.front()) == juce::Colours::white);
+}
+
+namespace
+{
+    // Six 1000 ms bars with one lane-0 note in the middle of each. Bars 1,2 and 5,6 fill the
+    // top grid line, bars 3,4 the bottom one.
+    std::vector<NoteLaneDisplay::BarSpan> sixBars()
+    {
+        std::vector<NoteLaneDisplay::BarSpan> bars;
+        for (long long i = 0; i < 6; ++i)
+            bars.push_back ({ i * 1000, 1000 });
+        return bars;
+    }
+
+    // Where the note in the middle of a bar in each row is drawn: left or right half, top
+    // or bottom grid line, on lane 0's line.
+    juce::Point<int> noteSpot (int row)
+    {
+        return { row % 2 == 0 ? 107 : 293, row / 2 == 0 ? 51 : 186 };
+    }
+
+    // How opaque the note drawn at a spot is, from 0 (only the lane line shows) to 1. The
+    // lane line under it is 159/255 opaque, and the note covers the rest.
+    float noteOpacity (const juce::Image& image, juce::Point<int> spot)
+    {
+        return static_cast<float> (image.getPixelAt (spot.x, spot.y).getAlpha() - 159) / 96.0f;
+    }
+
+    struct SixBarDisplay : OneBarDisplay
+    {
+        SixBarDisplay() : OneBarDisplay (2)
+        {
+            for (long long bar = 0; bar < 6; ++bar)
+                addNote (bar * 1000 + 500, 0, 60);
+        }
+
+        // The opacity of the note in each row, playing the bars from firstBar at playheadMs.
+        // Notes the playhead has passed count as played, so they aren't drawn.
+        std::array<float, 4> rowOpacities (long long playheadMs, int firstBar = 0)
+        {
+            for (auto& note : notes)
+                if (note.timeMs < playheadMs && note.performanceTimings.empty())
+                    note.performanceTimings.push_back (0);
+
+            auto bars = sixBars();
+            bars.erase (bars.begin(), bars.begin() + firstBar);
+            auto image = paint (bars, firstBar, playheadMs);
+
+            std::array<float, 4> opacities {};
+            for (int row = 0; row < 4; ++row)
+                opacities[(size_t) row] = noteOpacity (image, noteSpot (row));
+            return opacities;
+        }
+    };
+
+    bool near (float a, float b) { return std::abs (a - b) <= 0.05f; }
+}
+
+TEST_CASE ("NoteLaneDisplay shows both grid lines in full at the start", "[ui][lanes][fade]")
+{
+    SixBarDisplay display;
+    auto rows = display.rowOpacities (0);
+    for (auto opacity : rows)
+        CHECK (near (opacity, 1.0f));
+}
+
+TEST_CASE ("The next bars wait until the grid line they replace is finished", "[ui][lanes][fade]")
+{
+    SixBarDisplay display;
+
+    // Playing bar 2: bar 1's note is played, and bar 5 doesn't take its place yet.
+    auto rows = display.rowOpacities (1200);
+    CHECK (near (rows[0], 0.0f));
+    CHECK (near (rows[1], 1.0f));
+    CHECK (near (rows[2], 1.0f));
+    CHECK (near (rows[3], 1.0f));
+}
+
+TEST_CASE ("The next grid line fades in over the first bar of the current one", "[ui][lanes][fade]")
+{
+    SixBarDisplay display;
+
+    SECTION ("bars 5,6 start invisible as bar 3 starts")
+    {
+        auto rows = display.rowOpacities (2000);
+        CHECK (near (rows[0], 0.0f));
+        CHECK (near (rows[1], 0.0f));
+        CHECK (near (rows[2], 1.0f));
+        CHECK (near (rows[3], 1.0f));
+    }
+
+    SECTION ("are half faded in halfway through bar 3")
+    {
+        auto rows = display.rowOpacities (2500);
+        CHECK (near (rows[0], 0.5f));
+        CHECK (near (rows[1], 0.5f));
+        CHECK (near (rows[3], 1.0f));
+    }
+
+    SECTION ("and fully there once bar 4 starts")
+    {
+        auto rows = display.rowOpacities (3200);
+        CHECK (near (rows[0], 1.0f));
+        CHECK (near (rows[1], 1.0f));
+        CHECK (near (rows[3], 1.0f));
+    }
+}
+
+TEST_CASE ("Practice's bar numbering fades in the same way", "[ui][lanes][fade]")
+{
+    // Practice hands in only the bars from the one being played, numbered from how many
+    // came before it.
+    SixBarDisplay display;
+
+    auto rows = display.rowOpacities (2500, 2);
+    CHECK (near (rows[0], 0.5f));
+    CHECK (near (rows[1], 0.5f));
+    CHECK (near (rows[3], 1.0f));
+
+    // Playing bar 4, bar 3 has already been dropped, so its fade-in is long over.
+    rows = display.rowOpacities (3500, 3);
+    CHECK (near (rows[0], 1.0f));
+    CHECK (near (rows[1], 1.0f));
+}
+
+TEST_CASE ("Bars already played in the current grid line keep their beat lines", "[ui][lanes][fade]")
+{
+    SixBarDisplay display;
+    display.notes.emplace_back (250, ChartEvent::BEAT);
+    display.events.insert ({ 250, &display.notes.back() });
+
+    auto image = display.paint (sixBars(), 0, 1200);
+    auto background = image.getPixelAt (xAtTime (250) + 10, 30);
+    CHECK (image.getPixelAt (xAtTime (250), 30) != background);
 }

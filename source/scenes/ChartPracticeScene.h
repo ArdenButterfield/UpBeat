@@ -12,6 +12,7 @@
 #include "../Chart/PlaybackClock.h"
 #include "../UI/NoteLaneDisplay.h"
 #include "../UI/PlaybackControls.h"
+#include "../UI/TimingHistogram.h"
 #include "Scene.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 #include <deque>
@@ -73,6 +74,7 @@ private:
     NoteLaneDisplay noteLaneDisplay;
     std::vector<BarAtom> bars;
     BarProgressDisplay barProgressDisplay;
+    TimingHistogram timingHistogram;
 
     std::deque<int> unlearnedBarQueue;
     std::deque<int> playQueue;

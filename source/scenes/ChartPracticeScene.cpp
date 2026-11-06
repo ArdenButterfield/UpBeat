@@ -14,6 +14,7 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
       noteLaneDisplay (gs, gs->currentChart->numLanes),
       bars (BarAtom::splitIntoBars (*gs->currentChart)),
       barProgressDisplay (static_cast<int> (bars.size()), gs->colours),
+      timingHistogram (*gs),
       playing (false),
       desiredSceneId (SceneIDs::CHART_PRACTICE_SCENE),
       countInTime (gs->currentChart->countInTime)
@@ -32,6 +33,9 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
     addAndMakeVisible (noteLaneDisplay);
 
     addAndMakeVisible (barProgressDisplay);
+
+    noteLaneDisplay.onNoteTimed = [this] (long long errorMs) { timingHistogram.addTiming (errorMs); };
+    addAndMakeVisible (timingHistogram);
 
     setWantsKeyboardFocus (true);
     audioChartTimeMs = static_cast<double> (-countInTime);
@@ -228,6 +232,7 @@ void ChartPracticeScene::startGame()
     timeMs = -countInTime;
     currentBarStartMs = 0;
     completedBarCount = 0;
+    timingHistogram.reset();
     clock.start (countInTime);
     grabKeyboardFocus();
 
@@ -282,10 +287,13 @@ void ChartPracticeScene::resized()
 
     constexpr int controlsWidth = 70;
     constexpr int progressWidth = 100;
+    constexpr int histogramWidth = 120;
     auto bounds = getLocalBounds().reduced (10, 20);
     playbackControls.setBounds (bounds.removeFromLeft (controlsWidth));
     bounds.removeFromLeft (10);
     barProgressDisplay.setBounds (bounds.removeFromRight (progressWidth));
+    bounds.removeFromRight (10);
+    timingHistogram.setBounds (bounds.removeFromRight (histogramWidth));
     bounds.removeFromRight (10);
     noteLaneDisplay.setBounds (bounds);
 }

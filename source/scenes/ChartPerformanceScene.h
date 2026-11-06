@@ -10,6 +10,7 @@
 #include "../Chart/PlaybackClock.h"
 #include "../UI/NoteLaneDisplay.h"
 #include "../UI/PlaybackControls.h"
+#include "../UI/TimingHistogram.h"
 #include "Scene.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
@@ -32,6 +33,7 @@ private:
     MetronomeSynth metronomeSynth;
 
     NoteLaneDisplay noteLaneDisplay;
+    TimingHistogram timingHistogram;
 
     void buttonClicked (juce::Button*) override;
     void update() override;

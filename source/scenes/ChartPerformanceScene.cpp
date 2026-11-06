@@ -6,7 +6,7 @@
 
 #include "../Chart/BarAtom.h"
 
-ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale), synths (*gs->currentChart), noteLaneDisplay (gs, gs->currentChart->numLanes), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
+ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale), synths (*gs->currentChart), noteLaneDisplay (gs, gs->currentChart->numLanes), timingHistogram (*gs), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
     addAndMakeVisible (startButton);
     startButton.addListener (this);
@@ -20,6 +20,9 @@ ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startBu
     addAndMakeVisible (playbackControls);
 
     addAndMakeVisible (noteLaneDisplay);
+
+    noteLaneDisplay.onNoteTimed = [this] (long long errorMs) { timingHistogram.addTiming (errorMs); };
+    addAndMakeVisible (timingHistogram);
 
     setWantsKeyboardFocus (true);
     audioChartTimeMs = static_cast<double> (-gameState->currentChart->countInTime);
@@ -107,6 +110,7 @@ void ChartPerformanceScene::startGame()
     startButton.setVisible (false);
     playing = true;
     timeMs = -gameState->currentChart->countInTime;
+    timingHistogram.reset();
     clock.start (gameState->currentChart->countInTime);
     grabKeyboardFocus();
 
@@ -158,9 +162,12 @@ void ChartPerformanceScene::resized()
     grabKeyboardFocus();
     startButton.setBounds (getLocalBounds().withSizeKeepingCentre (200, 40));
     constexpr int controlsWidth = 70;
+    constexpr int histogramWidth = 120;
     auto bounds = getLocalBounds().reduced (10, 20);
     playbackControls.setBounds (bounds.removeFromLeft (controlsWidth));
     bounds.removeFromLeft (10);
+    timingHistogram.setBounds (bounds.removeFromRight (histogramWidth));
+    bounds.removeFromRight (10);
     noteLaneDisplay.setBounds (bounds);
 }
 

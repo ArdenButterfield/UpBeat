@@ -31,4 +31,6 @@ struct GameState
     std::array<std::string, NUM_TOLERANCE_CATEGORIES+1> toleranceLabels {"Perfect", "Great", "Good", "Ok", "Miss"};
 };
 
+static_assert (std::tuple_size_v<decltype (GameColours::histogramBars)> == GameState::NUM_TOLERANCE_CATEGORIES, "Each tolerance category needs its own histogram colour");
+
 #endif //UPBEAT_GAMESTATE_H

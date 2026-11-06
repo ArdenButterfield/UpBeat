@@ -51,7 +51,8 @@ namespace
         GameState state;
     };
 
-    // Places inside the 400x300 display where only one colour is drawn.
+    // Places inside the 400x300 display where only one colour is drawn: the top-left row's
+    // left edge and inside, and the key indicators below the rows.
     constexpr int rowOutlineX = 5, rowOutlineY = 20;
     constexpr int rowInsideX = 100, rowInsideY = 20;
     constexpr int lane0IndicatorX = 7, lane1IndicatorX = 202, indicatorY = 285;

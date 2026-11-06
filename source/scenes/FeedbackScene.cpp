@@ -4,9 +4,10 @@
 
 #include "FeedbackScene.h"
 
-FeedbackScene::FeedbackScene (GameState* gs) : Scene (gs), desiredSceneId (SceneIDs::CHART_FEEDBACK_SCENE), performanceGraph (gs->colours), retryButton ("Retry")
+FeedbackScene::FeedbackScene (GameState* gs) : Scene (gs), desiredSceneId (SceneIDs::CHART_FEEDBACK_SCENE), performanceGraph (gs->colours), timingHistogram (*gs), retryButton ("Retry")
 {
     addAndMakeVisible (performanceGraph);
+    addAndMakeVisible (timingHistogram);
     buildPerformanceGraph();
 
     addAndMakeVisible (retryButton);
@@ -42,6 +43,9 @@ void FeedbackScene::buildPerformanceGraph()
 
             xValues.push_back (static_cast<float> (event.first));
             yValues.push_back (static_cast<float> (timings[performance]));
+
+            if (performance == performanceCount - 1)
+                timingHistogram.addTiming (timings[performance]);
         }
 
         performanceGraph.addData (xValues, yValues);
@@ -61,11 +65,13 @@ void FeedbackScene::paint (juce::Graphics& g)
 void FeedbackScene::resized()
 {
     constexpr int retryButtonHeight = 40;
+    constexpr int histogramWidth = 120;
 
     auto titleSection = getLocalBounds().withHeight (40);
     auto bodySection = getLocalBounds().withTrimmedTop (titleSection.getHeight());
     auto retryButtonSection = bodySection.removeFromBottom (retryButtonHeight);
 
+    timingHistogram.setBounds (bodySection.removeFromRight (histogramWidth));
     performanceGraph.setBounds (bodySection);
     retryButton.setBounds (retryButtonSection.withSizeKeepingCentre (150, 30));
 }

@@ -6,10 +6,16 @@
 
 #include "../Chart/BarAtom.h"
 
-ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale), synths (*gs->currentChart), noteLaneDisplay (gs, gs->currentChart->numLanes), timingHistogram (*gs), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
+ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale), synthLoader (*gs->currentChart), countIn (BarAtom::splitIntoBars (*gs->currentChart).front()), noteLaneDisplay (gs, gs->currentChart->numLanes), timingHistogram (*gs), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
-    addAndMakeVisible (startButton);
+    // Hidden, with "Loading..." in its place, until the synths have loaded.
+    addChildComponent (startButton);
     startButton.addListener (this);
+    synthLoader.onLoaded = [this]
+    {
+        startButton.setVisible (true);
+        repaint();
+    };
 
     clock.setTempoScale (gameState->currentChart->tempoScale);
     playbackControls.onTempoScaleChange = [this] (double tempoScale)
@@ -25,7 +31,7 @@ ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startBu
     addAndMakeVisible (timingHistogram);
 
     setWantsKeyboardFocus (true);
-    audioChartTimeMs = static_cast<double> (-gameState->currentChart->countInTime);
+    audioChartTimeMs = static_cast<double> (-countIn.lengthMs);
 }
 
 ChartPerformanceScene::~ChartPerformanceScene()
@@ -34,13 +40,16 @@ ChartPerformanceScene::~ChartPerformanceScene()
 void ChartPerformanceScene::prepareToPlay (double _sampleRate, int samplesPerBlock)
 {
     sampleRate = _sampleRate;
-    synths.prepareToPlay (sampleRate, samplesPerBlock);
+    synthLoader.prepareToPlay (sampleRate, samplesPerBlock);
     metronomeSynth.prepareToPlay (sampleRate);
 }
 
 void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer, juce::MidiBuffer& midi_message_metadatas)
 {
     juce::ignoreUnused (midi_message_metadatas);
+    // nullptr until the synths have loaded; the game can't start before then.
+    auto* synths = synthLoader.getSynths();
+
     auto lock = juce::ScopedTryLock(playbackLock);
     if (lock.isLocked())
     {
@@ -48,11 +57,13 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
         {
             auto e = playbackQueue.front();
             playbackQueue.pop();
-            synths.noteOn (e->synthId, e->midiNote, e->velocity, noteDurationSeconds (*e));
+            if (synths != nullptr)
+                synths->noteOn (e->synthId, e->midiNote, e->velocity, noteDurationSeconds (*e));
         }
     }
 
-    synths.applyAutomation (audioChartTimeMs);
+    if (synths != nullptr)
+        synths->applyAutomation (audioChartTimeMs);
 
     if (playing)
     {
@@ -60,11 +71,15 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
         auto bufferStartTime = static_cast<long long> (std::floor (audioChartTimeMs));
         auto bufferEndTime = static_cast<long long> (std::floor (audioChartTimeMs + bufferChartMs));
 
+        for (auto click = countIn.clicks.lower_bound (bufferStartTime); click != countIn.clicks.end() && click->first < bufferEndTime; ++click)
+            metronomeSynth.noteOn (click->second.type == ChartEvent::BARLINE ? MetronomeSynth::BARLINE : MetronomeSynth::BEAT);
+
         for (auto event = gameState->currentChart->events.lower_bound (bufferStartTime); event != gameState->currentChart->events.end() && event->first < bufferEndTime; ++event)
         {
             if (event->second.type == ChartEvent::BACKGROUND_NOTE)
             {
-                synths.noteOn (event->second.synthId, event->second.midiNote, event->second.velocity, noteDurationSeconds (event->second));
+                if (synths != nullptr)
+                    synths->noteOn (event->second.synthId, event->second.midiNote, event->second.velocity, noteDurationSeconds (event->second));
             } else if (event->second.type == ChartEvent::BARLINE)
             {
                 metronomeSynth.noteOn (MetronomeSynth::BARLINE);
@@ -76,10 +91,11 @@ void ChartPerformanceScene::processBlock (juce::AudioBuffer<float>& audio_buffer
         audioChartTimeMs += bufferChartMs;
     } else
     {
-        audioChartTimeMs = static_cast<double> (-gameState->currentChart->countInTime);
+        audioChartTimeMs = static_cast<double> (-countIn.lengthMs);
     }
 
-    synths.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+    if (synths != nullptr)
+        synths->renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
     metronomeSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
 
 }
@@ -109,9 +125,9 @@ void ChartPerformanceScene::startGame()
 {
     startButton.setVisible (false);
     playing = true;
-    timeMs = -gameState->currentChart->countInTime;
+    timeMs = -countIn.lengthMs;
     timingHistogram.reset();
-    clock.start (gameState->currentChart->countInTime);
+    clock.start (countIn.lengthMs);
     grabKeyboardFocus();
 
     displayEvents.clear();
@@ -155,6 +171,16 @@ void ChartPerformanceScene::update()
 void ChartPerformanceScene::paint (juce::Graphics& g)
 {
     g.fillAll (gameState->colours.playBackground);
+}
+
+void ChartPerformanceScene::paintOverChildren (juce::Graphics& g)
+{
+    if (! synthLoader.isLoaded())
+    {
+        paintLoadingMessage (g);
+        // Lets the loader take the message thread for its next synth, now the scene is on screen.
+        synthLoader.framePainted();
+    }
 }
 
 void ChartPerformanceScene::resized()

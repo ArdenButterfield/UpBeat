@@ -1,4 +1,5 @@
 #include <BundledResources.h>
+#include <Chart/BarAtom.h>
 #include <Chart/Chart.h>
 
 #include <catch2/catch_test_macros.hpp>
@@ -101,4 +102,75 @@ TEST_CASE ("The bundled 6/8 jig clicks only on beat 4 between barlines", "[metro
 
     REQUIRE (expected.size() > 0);
     CHECK (beatClicks (*chart) == expected);
+}
+
+namespace
+{
+    // The count-in's clicks as (time, is barline) pairs, in order.
+    std::vector<std::pair<long long, bool>> countInClicks (const Chart& chart)
+    {
+        CountIn countIn (BarAtom::splitIntoBars (chart).front());
+        std::vector<std::pair<long long, bool>> clicks;
+        for (auto& [time, event] : countIn.clicks)
+            clicks.emplace_back (time, event.type == ChartEvent::BARLINE);
+        return clicks;
+    }
+}
+
+TEST_CASE ("The count-in lasts two of the chart's first measures", "[metronome][countin]")
+{
+    // Beats are 250 ms apart.
+    auto fourFour = Chart::fromYaml (chartWithBars ({ { 4, 4 }, { 3, 4 } }));
+    auto threeFour = Chart::fromYaml (chartWithBars ({ { 3, 4 }, { 4, 4 } }));
+    REQUIRE (fourFour.has_value());
+    REQUIRE (threeFour.has_value());
+
+    CHECK (CountIn (BarAtom::splitIntoBars (*fourFour).front()).lengthMs == 2000);
+    CHECK (CountIn (BarAtom::splitIntoBars (*threeFour).front()).lengthMs == 1500);
+}
+
+TEST_CASE ("The count-in clicks the first measure's metronome twice, ending as the chart starts", "[metronome][countin]")
+{
+    SECTION ("simple time clicks every beat")
+    {
+        auto chart = Chart::fromYaml (chartWithBars ({ { 4, 4 }, { 4, 4 } }));
+        REQUIRE (chart.has_value());
+        std::vector<std::pair<long long, bool>> expected {
+            { -2000, true }, { -1750, false }, { -1500, false }, { -1250, false },
+            { -1000, true }, { -750, false }, { -500, false }, { -250, false },
+        };
+        CHECK (countInClicks (*chart) == expected);
+    }
+
+    SECTION ("compound time clicks every dotted beat")
+    {
+        auto chart = Chart::fromYaml (chartWithBars ({ { 6, 8 }, { 4, 4 } }));
+        REQUIRE (chart.has_value());
+        std::vector<std::pair<long long, bool>> expected { { -3000, true }, { -2250, false }, { -1500, true }, { -750, false } };
+        CHECK (countInClicks (*chart) == expected);
+    }
+
+    SECTION ("the chart's own clicks don't repeat in it")
+    {
+        auto chart = Chart::fromYaml (chartWithBars ({ { 2, 4 }, { 2, 4 } }));
+        REQUIRE (chart.has_value());
+        for (auto [time, barline] : countInClicks (*chart))
+            CHECK (time < 0);
+    }
+}
+
+TEST_CASE ("A chart without barlines has no count-in", "[metronome][countin]")
+{
+    auto chart = Chart::fromYaml (R"(
+title: no barlines
+events:
+- { type: BeatEvent, time: 0.0, bar: 1, beat: 1 }
+- { type: BeatEvent, time: 0.5, bar: 1, beat: 2 }
+- { type: BeatEvent, time: 1.0, bar: 1, beat: 3 }
+)");
+    REQUIRE (chart.has_value());
+
+    CountIn countIn (BarAtom::splitIntoBars (*chart).front());
+    CHECK (countIn.lengthMs == 0);
+    CHECK (countIn.clicks.empty());
 }

@@ -49,3 +49,28 @@ std::vector<BarAtom> BarAtom::splitIntoBars (const Chart& chart)
 
     return bars;
 }
+
+CountIn::CountIn (const BarAtom& firstBar)
+{
+    // splitIntoBars starts every bar at a barline, unless the chart has none at all.
+    auto hasBarline = std::any_of (firstBar.events.begin(), firstBar.events.end(), [] (const auto& entry) {
+        return entry.second.type == ChartEvent::BARLINE;
+    });
+    if (! hasBarline)
+        return;
+
+    lengthMs = firstBar.lengthMs * numBars;
+    for (int repeat = 0; repeat < numBars; ++repeat)
+    {
+        auto repeatStartMs = firstBar.lengthMs * repeat - lengthMs;
+        for (auto& [time, event] : firstBar.events)
+        {
+            if (event.type == ChartEvent::BARLINE || (event.type == ChartEvent::BEAT && event.metronomeClick))
+            {
+                auto click = event;
+                click.timeMs = repeatStartMs + time;
+                clicks.insert ({ click.timeMs, std::move (click) });
+            }
+        }
+    }
+}

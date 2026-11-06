@@ -29,4 +29,20 @@ public:
     static std::vector<BarAtom> splitIntoBars (const Chart& chart);
 };
 
+// The count-in before a chart (or a practice run) starts: the chart's first measure played
+// numBars times, clicking the metronome as that measure does, timed to end at time 0 where
+// the chart begins. A chart without barlines has no measures to count in with, so its
+// count-in is empty: no length and no clicks.
+struct CountIn
+{
+    static constexpr int numBars = 2;
+
+    explicit CountIn (const BarAtom& firstBar);
+
+    long long lengthMs = 0;
+    // Each repeat of the first measure's BARLINE and clicking BEAT events, at times from
+    // -lengthMs up to 0.
+    std::multimap<long long, ChartEvent> clicks;
+};
+
 #endif //UPBEAT_BARATOM_H

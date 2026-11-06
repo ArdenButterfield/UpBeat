@@ -54,8 +54,6 @@ public:
     int numLanes = 0;
     ChartColours colours;
 
-    long long countInTime = 2000;
-
     // Multiplies real elapsed time when advancing chart playback, letting the player
     // practice at a slower or faster speed than the chart's original tempo.
     double tempoScale = 1.0;

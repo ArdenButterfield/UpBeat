@@ -5,8 +5,9 @@
 #ifndef UPBEAT_CHARTPERFORMANCESCENE_H
 #define UPBEAT_CHARTPERFORMANCESCENE_H
 
-#include "../Audio/ChartSynthBank.h"
+#include "../Audio/ChartSynthLoader.h"
 #include "../Audio/MetronomeSynth.h"
+#include "../Chart/BarAtom.h"
 #include "../Chart/PlaybackClock.h"
 #include "../UI/NoteLaneDisplay.h"
 #include "../UI/PlaybackControls.h"
@@ -29,8 +30,10 @@ private:
     PlaybackControls playbackControls;
 
     // Player hits and background notes both play on the chart synth the note belongs to.
-    ChartSynthBank synths;
+    ChartSynthLoader synthLoader;
     MetronomeSynth metronomeSynth;
+    // Built before playback starts and only read afterwards, so the audio thread can read it freely.
+    CountIn countIn;
 
     NoteLaneDisplay noteLaneDisplay;
     TimingHistogram timingHistogram;
@@ -38,6 +41,7 @@ private:
     void buttonClicked (juce::Button*) override;
     void update() override;
     void paint (juce::Graphics& g) override;
+    void paintOverChildren (juce::Graphics& g) override;
     void resized() override;
     void startGame();
     bool keyPressed (const juce::KeyPress& key) override;

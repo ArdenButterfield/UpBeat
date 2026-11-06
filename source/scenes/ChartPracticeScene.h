@@ -5,7 +5,7 @@
 #ifndef UPBEAT_CHARTPRACTICESCENE_H
 #define UPBEAT_CHARTPRACTICESCENE_H
 
-#include "../Audio/ChartSynthBank.h"
+#include "../Audio/ChartSynthLoader.h"
 #include "../Audio/MetronomeSynth.h"
 #include "../Chart/BarAtom.h"
 #include "../UI/BarProgressDisplay.h"
@@ -41,6 +41,7 @@ private:
     void buttonClicked (juce::Button*) override;
     void update() override;
     void paint (juce::Graphics& g) override;
+    void paintOverChildren (juce::Graphics& g) override;
     void resized() override;
     void startGame();
     bool keyPressed (const juce::KeyPress& key) override;
@@ -68,11 +69,13 @@ private:
     PlaybackControls playbackControls;
 
     // Player hits and background notes both play on the chart synth the note belongs to.
-    ChartSynthBank synths;
+    ChartSynthLoader synthLoader;
     MetronomeSynth metronomeSynth;
 
     NoteLaneDisplay noteLaneDisplay;
     std::vector<BarAtom> bars;
+    // Built before playback starts and only read afterwards, so the audio thread can read it freely.
+    CountIn countIn;
     BarProgressDisplay barProgressDisplay;
     TimingHistogram timingHistogram;
 
@@ -109,8 +112,6 @@ private:
 
     std::queue<ChartEvent*> playbackQueue;
     juce::CriticalSection playbackLock;
-
-    long long countInTime;
 
     double sampleRate;
 };

@@ -26,6 +26,9 @@ public:
     virtual SceneIDs::SceneID getSceneID() const;
     virtual SceneIDs::SceneID getDesiredSceneID();
 protected:
+    // "Loading..." across the middle of the scene, for while it isn't ready to play.
+    void paintLoadingMessage (juce::Graphics& g) const;
+
     GameState* gameState;
 };
 

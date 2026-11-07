@@ -131,14 +131,13 @@ void ChartPerformanceScene::startGame()
     grabKeyboardFocus();
 
     displayEvents.clear();
-    lastNoteTimeMs = 0;
+    lastNoteEndMs = 0;
     for (auto& event : gameState->currentChart->events)
     {
         if (event.second.type == ChartEvent::NOTE)
-        {
             event.second.performanceTimings.emplace_back(UNPLAYED_NOTE);
-            lastNoteTimeMs = std::max (lastNoteTimeMs, event.first);
-        }
+        if (event.second.type == ChartEvent::NOTE || event.second.type == ChartEvent::BACKGROUND_NOTE)
+            lastNoteEndMs = std::max (lastNoteEndMs, event.first + event.second.lengthMs);
         displayEvents.insert ({ event.first, &event.second });
     }
     noteLaneDisplay.setEvents (&displayEvents);
@@ -157,7 +156,7 @@ void ChartPerformanceScene::update()
     {
         timeMs = clock.now();
 
-        if (timeMs > lastNoteTimeMs + 500)
+        if (timeMs >= lastNoteEndMs + resultsDelayChartMs (clock.getTempoScale()))
         {
             desiredSceneId = SceneIDs::CHART_FEEDBACK_SCENE;
         }
@@ -188,12 +187,12 @@ void ChartPerformanceScene::resized()
     grabKeyboardFocus();
     startButton.setBounds (getLocalBounds().withSizeKeepingCentre (200, 40));
     constexpr int controlsWidth = 70;
-    constexpr int histogramWidth = 120;
+    constexpr int histogramHeight = 110;
     auto bounds = getLocalBounds().reduced (10, 20);
     playbackControls.setBounds (bounds.removeFromLeft (controlsWidth));
     bounds.removeFromLeft (10);
-    timingHistogram.setBounds (bounds.removeFromRight (histogramWidth));
-    bounds.removeFromRight (10);
+    timingHistogram.setBounds (bounds.removeFromBottom (histogramHeight));
+    bounds.removeFromBottom (10);
     noteLaneDisplay.setBounds (bounds);
 }
 

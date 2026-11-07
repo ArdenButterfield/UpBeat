@@ -21,7 +21,7 @@ public:
 private:
     SceneIDs::SceneID desiredSceneId;
     LineGraph performanceGraph;
-    // The most recent performance's timings, beside the graph of every performance.
+    // The most recent performance's timings, under the graph of every performance.
     TimingHistogram timingHistogram;
     juce::TextButton retryButton;
 

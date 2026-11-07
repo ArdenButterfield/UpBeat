@@ -82,6 +82,9 @@ private:
     std::deque<int> unlearnedBarQueue;
     std::deque<int> playQueue;
     long long currentBarStartMs;
+    // When the last note (playable or background) of the bars played so far stops sounding,
+    // on the practice timeline.
+    long long lastNoteEndMs = 0;
     // How many bar reps have been played through; decides which display row the next bar fills.
     int completedBarCount = 0;
 

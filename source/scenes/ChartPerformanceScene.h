@@ -55,7 +55,8 @@ private:
     // Audio-thread chart time, advanced each block by the block length times the
     // clock's current tempo scale.
     double audioChartTimeMs;
-    long long lastNoteTimeMs;
+    // When the chart's last note (playable or background) stops sounding.
+    long long lastNoteEndMs = 0;
     SceneIDs::SceneID desiredSceneId;
 
     std::queue<ChartEvent*> playbackQueue;

@@ -71,14 +71,15 @@ namespace
         REQUIRE (histogram != nullptr);
         REQUIRE (lanes != nullptr);
 
-        SECTION ("to the right of the lanes, as tall as them")
+        SECTION ("under the lanes, as wide as them")
         {
             CHECK (histogram->isVisible());
-            CHECK (histogram->getX() >= lanes->getRight());
-            CHECK (histogram->getX() - lanes->getRight() <= 20);
-            CHECK (histogram->getY() == lanes->getY());
-            CHECK (histogram->getHeight() == lanes->getHeight());
-            CHECK (histogram->getWidth() > 0);
+            CHECK (histogram->getY() >= lanes->getBottom());
+            CHECK (histogram->getY() - lanes->getBottom() <= 20);
+            CHECK (histogram->getX() == lanes->getX());
+            CHECK (histogram->getWidth() == lanes->getWidth());
+            CHECK (histogram->getHeight() > 0);
+            CHECK (histogram->getHeight() < lanes->getHeight());
             CHECK (scene.getLocalBounds().contains (histogram->getBounds()));
         }
 
@@ -185,7 +186,7 @@ TEST_CASE ("TimingHistogram draws dotted lines at the median and quartiles", "[h
 {
     GameState state;
     TimingHistogram histogram (state);
-    histogram.setSize (120, 600);
+    histogram.setSize (600, 120);
 
     // The quartiles and median (-105, -40 and 35) fall between these hits' bars, so the
     // lines are drawn over the background.
@@ -195,7 +196,7 @@ TEST_CASE ("TimingHistogram draws dotted lines at the median and quartiles", "[h
     REQUIRE_THAT (histogram.getPercentileErrorMs (0.5), WithinAbs (-40.0, 1e-9));
     REQUIRE_THAT (histogram.getPercentileErrorMs (0.75), WithinAbs (35.0, 1e-9));
 
-    juce::Image image (juce::Image::RGB, 120, 600, true, juce::SoftwareImageType());
+    juce::Image image (juce::Image::RGB, 600, 120, true, juce::SoftwareImageType());
     {
         juce::Graphics g (image);
         g.fillAll (juce::Colours::black);
@@ -203,10 +204,10 @@ TEST_CASE ("TimingHistogram draws dotted lines at the median and quartiles", "[h
     }
 
     auto plot = histogram.getPlotArea();
-    auto row = [&] (double errorMs) { return juce::roundToInt (std::floor (histogram.yForError (errorMs))); };
-    auto litPixels = [&] (int y) {
+    auto column = [&] (double errorMs) { return juce::roundToInt (std::floor (histogram.xForError (errorMs))); };
+    auto litPixels = [&] (int x) {
         int lit = 0;
-        for (int x = (int) plot.getX(); x < (int) plot.getRight(); ++x)
+        for (int y = (int) plot.getY(); y < (int) plot.getBottom(); ++y)
             lit += image.getPixelAt (x, y).getBrightness() > 0.3f ? 1 : 0;
         return lit;
     };
@@ -214,36 +215,43 @@ TEST_CASE ("TimingHistogram draws dotted lines at the median and quartiles", "[h
     for (auto error : { -105.0, -40.0, 35.0 })
     {
         INFO ("marker at " << error << " ms");
-        auto lit = litPixels (row (error));
-        // Dotted: some of the row is drawn, but not all of it.
+        auto lit = litPixels (column (error));
+        // Dotted: some of the column is drawn, but not all of it.
         CHECK (lit > 0);
-        CHECK (lit < (int) plot.getWidth());
+        CHECK (lit < (int) plot.getHeight());
     }
 
     // The median's line is drawn stronger than the quartiles'.
-    auto brightest = [&] (int y) {
+    auto brightest = [&] (int x) {
         float best = 0.f;
-        for (int x = (int) plot.getX(); x < (int) plot.getRight(); ++x)
+        for (int y = (int) plot.getY(); y < (int) plot.getBottom(); ++y)
             best = std::max (best, image.getPixelAt (x, y).getBrightness());
         return best;
     };
-    CHECK (brightest (row (-40.0)) > brightest (row (-105.0)));
-    CHECK (brightest (row (-40.0)) > brightest (row (35.0)));
+    CHECK (brightest (column (-40.0)) > brightest (column (-105.0)));
+    CHECK (brightest (column (-40.0)) > brightest (column (35.0)));
 
-    // Each line's label sits just above it, towards the right.
-    auto labelRow = row (-40.0) - 6;
-    int litRight = 0, litLeft = 0;
-    for (int x = (int) plot.getX(); x < (int) plot.getRight(); ++x)
-        (x < (int) plot.getCentreX() ? litLeft : litRight) += image.getPixelAt (x, labelRow).getBrightness() > 0.3f ? 1 : 0;
-    CHECK (litRight > 0);
-    CHECK (litLeft == 0);
+    // Each line's label sits above the plot, the text ending at the line: the median's in the
+    // top row of labels, the quartiles' in the row below.
+    auto litInRow = [&] (int y, int fromX, int toX) {
+        int lit = 0;
+        for (int x = std::max (fromX, 0); x < std::min (toX, image.getWidth()); ++x)
+            lit += image.getPixelAt (x, y).getBrightness() > 0.3f ? 1 : 0;
+        return lit;
+    };
+    auto medianRow = (int) plot.getY() - 18;
+    auto quartileRow = (int) plot.getY() - 6;
+    CHECK (litInRow (medianRow, column (-40.0) - 60, column (-40.0) - 1) > 0);
+    CHECK (litInRow (medianRow, column (-40.0) + 2, (int) plot.getRight()) == 0);
+    CHECK (litInRow (quartileRow, column (35.0) - 60, column (35.0) - 1) > 0);
+    CHECK (litInRow (quartileRow, column (35.0) + 2, (int) plot.getRight()) == 0);
 }
 
-TEST_CASE ("TimingHistogram's bars grow with their counts, early at the top", "[histogram]")
+TEST_CASE ("TimingHistogram's bars grow with their counts, early at the left", "[histogram]")
 {
     GameState state;
     TimingHistogram histogram (state);
-    histogram.setSize (120, 600);
+    histogram.setSize (600, 120);
     auto earlyError = -hitWindow (state) / 2;
 
     histogram.addTiming (earlyError);
@@ -256,17 +264,17 @@ TEST_CASE ("TimingHistogram's bars grow with their counts, early at the top", "[
 
     SECTION ("the busiest bin spans the plot; the others are in proportion")
     {
-        CHECK_THAT (onTime.getWidth(), WithinAbs (plot.getWidth(), 1e-3));
-        CHECK_THAT (early.getWidth(), WithinAbs (plot.getWidth() / 4.0f, 1e-3));
-        CHECK (early.getX() == plot.getX());
+        CHECK_THAT (onTime.getHeight(), WithinAbs (plot.getHeight(), 1e-3));
+        CHECK_THAT (early.getHeight(), WithinAbs (plot.getHeight() / 4.0f, 1e-3));
+        CHECK_THAT (early.getBottom(), WithinAbs (plot.getBottom(), 1e-3));
     }
 
-    SECTION ("each bin's bar sits at its error, the top of the plot being the earliest")
+    SECTION ("each bin's bar sits at its error, the left of the plot being the earliest")
     {
-        CHECK (early.getBottom() < onTime.getY());
-        auto zeroY = plot.getY() + plot.getHeight() / 2.0f;
-        CHECK_THAT (onTime.getY(), WithinAbs (zeroY, 1e-3));
-        CHECK_THAT (early.getY(), WithinAbs (plot.getY() + plot.getHeight() / 4.0f, 1e-3));
+        CHECK (early.getRight() < onTime.getX());
+        auto zeroX = plot.getX() + plot.getWidth() / 2.0f;
+        CHECK_THAT (onTime.getX(), WithinAbs (zeroX, 1e-3));
+        CHECK_THAT (early.getX(), WithinAbs (plot.getX() + plot.getWidth() / 4.0f, 1e-3));
         CHECK (plot.contains (early));
         CHECK (plot.contains (onTime));
     }
@@ -282,7 +290,7 @@ TEST_CASE ("TimingHistogram colours bars by tolerance category", "[histogram]")
 {
     GameState state;
     TimingHistogram histogram (state);
-    histogram.setSize (120, 600);
+    histogram.setSize (600, 120);
 
     // A hit in the middle of each category - Perfect, Great, Good and Ok - alternately
     // early and late.
@@ -296,7 +304,7 @@ TEST_CASE ("TimingHistogram colours bars by tolerance category", "[histogram]")
     for (auto error : errors)
         histogram.addTiming (error);
 
-    juce::Image image (juce::Image::ARGB, 120, 600, true, juce::SoftwareImageType());
+    juce::Image image (juce::Image::ARGB, 600, 120, true, juce::SoftwareImageType());
     {
         juce::Graphics g (image);
         histogram.paint (g);

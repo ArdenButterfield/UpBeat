@@ -170,6 +170,9 @@ void ChartPracticeScene::advanceBarQueue()
     auto barIndex = playQueue.front();
     playQueue.pop_front();
     auto& bar = bars[(size_t) barIndex];
+    for (auto& [t, event] : bar.events)
+        if (event.type == ChartEvent::NOTE || event.type == ChartEvent::BACKGROUND_NOTE)
+            lastNoteEndMs = std::max (lastNoteEndMs, currentBarStartMs + t + event.lengthMs);
     currentBarStartMs += bar.lengthMs;
     ++completedBarCount;
 
@@ -248,6 +251,7 @@ void ChartPracticeScene::startGame()
     playing = true;
     timeMs = -countIn.lengthMs;
     currentBarStartMs = 0;
+    lastNoteEndMs = 0;
     completedBarCount = 0;
     timingHistogram.reset();
     clock.start (countIn.lengthMs);
@@ -281,7 +285,7 @@ void ChartPracticeScene::update()
             advanceBarQueue();
         }
 
-        if (playQueue.empty())
+        if (playQueue.empty() && timeMs >= lastNoteEndMs + resultsDelayChartMs (clock.getTempoScale()))
         {
             desiredSceneId = SceneIDs::CHART_FEEDBACK_SCENE;
         }
@@ -314,14 +318,14 @@ void ChartPracticeScene::resized()
 
     constexpr int controlsWidth = 70;
     constexpr int progressWidth = 100;
-    constexpr int histogramWidth = 120;
+    constexpr int histogramHeight = 110;
     auto bounds = getLocalBounds().reduced (10, 20);
     playbackControls.setBounds (bounds.removeFromLeft (controlsWidth));
     bounds.removeFromLeft (10);
     barProgressDisplay.setBounds (bounds.removeFromRight (progressWidth));
     bounds.removeFromRight (10);
-    timingHistogram.setBounds (bounds.removeFromRight (histogramWidth));
-    bounds.removeFromRight (10);
+    timingHistogram.setBounds (bounds.removeFromBottom (histogramHeight));
+    bounds.removeFromBottom (10);
     noteLaneDisplay.setBounds (bounds);
 }
 

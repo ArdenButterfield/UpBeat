@@ -2,10 +2,14 @@
 
 namespace
 {
-    constexpr int headerHeight = 40;
-    constexpr int labelHeight = 16;
+    constexpr int statsWidth = 90;
+    constexpr int labelHeight = 14; // The "Early" and "Late" labels under the plot
     constexpr float sideMargin = 4.f;
+    // Two rows of marker labels above the plot: the median's on top, the quartiles' below,
+    // so the median's label doesn't collide with the quartiles' either side of it.
     constexpr int markerLabelHeight = 12;
+    constexpr int numMarkerLabelRows = 2;
+    constexpr float markerLabelWidth = 60.f;
 
     juce::String formatMs (long long ms)
     {
@@ -70,31 +74,33 @@ int TimingHistogram::binForError (long long errorMs) const
 juce::Rectangle<float> TimingHistogram::getPlotArea() const
 {
     auto area = getLocalBounds().toFloat();
-    area.removeFromTop ((float) headerHeight + labelHeight);
+    area.removeFromLeft ((float) statsWidth);
+    area.removeFromTop ((float) (markerLabelHeight * numMarkerLabelRows));
     area.removeFromBottom ((float) labelHeight);
     return area.reduced (sideMargin, 0.f);
 }
 
-float TimingHistogram::yForError (double errorMs) const
+float TimingHistogram::xForError (double errorMs) const
 {
     auto plot = getPlotArea();
     auto range = static_cast<double> (rangeMs());
     auto clamped = juce::jlimit (-range, range, errorMs);
-    return plot.getY() + static_cast<float> ((clamped + range) / (2.0 * range)) * plot.getHeight();
+    return plot.getX() + static_cast<float> ((clamped + range) / (2.0 * range)) * plot.getWidth();
 }
 
-void TimingHistogram::drawMarker (juce::Graphics& g, double errorMs, juce::Colour colour) const
+void TimingHistogram::drawMarker (juce::Graphics& g, double errorMs, juce::Colour colour, int labelRow) const
 {
     auto plot = getPlotArea();
-    // Through the middle of a row of pixels, so the dots are crisp.
-    auto y = std::floor (yForError (errorMs)) + 0.5f;
+    // Through the middle of a column of pixels, so the dots are crisp.
+    auto x = std::floor (xForError (errorMs)) + 0.5f;
+    auto labelBottom = plot.getY() - (float) (markerLabelHeight * (numMarkerLabelRows - 1 - labelRow));
     const float dashes[] = { 2.f, 2.f };
 
     g.setColour (colour);
-    g.drawDashedLine ({ plot.getX(), y, plot.getRight(), y }, dashes, 2);
+    g.drawDashedLine ({ x, labelBottom, x, plot.getBottom() }, dashes, 2);
     g.setFont (10.0f);
     g.drawText (formatMs (juce::roundToInt (errorMs)),
-        juce::Rectangle<float> (plot.getX(), y - (float) markerLabelHeight, plot.getWidth(), (float) markerLabelHeight),
+        juce::Rectangle<float> (x - markerLabelWidth, labelBottom - (float) markerLabelHeight, markerLabelWidth - 2.f, (float) markerLabelHeight),
         juce::Justification::centredRight);
 }
 
@@ -113,12 +119,12 @@ juce::Rectangle<float> TimingHistogram::getBarBounds (int bin) const
         return {};
 
     auto plot = getPlotArea();
-    auto top = yForError ((double) (bin * binWidthMs - rangeMs()));
-    auto bottom = yForError ((double) ((bin + 1) * binWidthMs - rangeMs()));
-    auto width = plot.getWidth() * static_cast<float> (bins[(size_t) bin]) / static_cast<float> (largest);
-    // A pixel's gap between bars, when they're tall enough to spare one.
-    auto gap = bottom - top > 3.f ? 1.f : 0.f;
-    return { plot.getX(), top, width, bottom - top - gap };
+    auto left = xForError ((double) (bin * binWidthMs - rangeMs()));
+    auto right = xForError ((double) ((bin + 1) * binWidthMs - rangeMs()));
+    auto height = plot.getHeight() * static_cast<float> (bins[(size_t) bin]) / static_cast<float> (largest);
+    // A pixel's gap between bars, when they're wide enough to spare one.
+    auto gap = right - left > 3.f ? 1.f : 0.f;
+    return { left, plot.getBottom() - height, right - left - gap, height };
 }
 
 void TimingHistogram::paint (juce::Graphics& g)
@@ -127,26 +133,25 @@ void TimingHistogram::paint (juce::Graphics& g)
     g.fillAll (colours.histogramBackground);
 
     auto bounds = getLocalBounds();
-    auto header = bounds.removeFromTop (headerHeight);
+    auto stats = bounds.removeFromLeft (statsWidth).withSizeKeepingCentre (statsWidth, 40);
     g.setColour (colours.text);
     g.setFont (14.0f);
-    g.drawText (juce::String (count) + (count == 1 ? " hit" : " hits"), header.removeFromTop (headerHeight / 2), juce::Justification::centred);
+    g.drawText (juce::String (count) + (count == 1 ? " hit" : " hits"), stats.removeFromTop (20), juce::Justification::centred);
     auto mean = juce::roundToInt (getMeanErrorMs());
-    g.drawText (count == 0 ? juce::String ("mean -") : "mean " + formatMs (mean),
-        header,
-        juce::Justification::centred);
-
-    g.setFont (12.0f);
-    g.drawText ("Early", bounds.removeFromTop (labelHeight), juce::Justification::centred);
-    g.drawText ("Late", bounds.removeFromBottom (labelHeight), juce::Justification::centred);
+    g.drawText (count == 0 ? juce::String ("mean -") : "mean " + formatMs (mean), stats, juce::Justification::centred);
 
     auto plot = getPlotArea();
+
+    g.setFont (12.0f);
+    auto labels = juce::Rectangle<float> (plot.getX(), plot.getBottom(), plot.getWidth(), (float) labelHeight);
+    g.drawText ("Early", labels, juce::Justification::centredLeft);
+    g.drawText ("Late", labels, juce::Justification::centredRight);
 
     // The tolerance categories' edges, either side of a perfectly timed hit.
     g.setColour (colours.histogramAxis.withAlpha (0.2f));
     for (int i = 0; i < GameState::NUM_TOLERANCE_CATEGORIES - 1; ++i)
         for (auto sign : { -1.0, 1.0 })
-            g.drawHorizontalLine (juce::roundToInt (yForError (sign * (double) gameState.tolerances[(size_t) i])), plot.getX(), plot.getRight());
+            g.drawVerticalLine (juce::roundToInt (xForError (sign * (double) gameState.tolerances[(size_t) i])), plot.getY(), plot.getBottom());
 
     for (int bin = 0; bin < getNumBins(); ++bin)
     {
@@ -159,12 +164,12 @@ void TimingHistogram::paint (juce::Graphics& g)
     }
 
     g.setColour (colours.histogramAxis);
-    g.drawHorizontalLine (juce::roundToInt (yForError (0.0)), plot.getX(), plot.getRight());
+    g.drawVerticalLine (juce::roundToInt (xForError (0.0)), plot.getY(), plot.getBottom());
 
     if (count > 0)
     {
-        drawMarker (g, getPercentileErrorMs (0.25), colours.histogramQuartile);
-        drawMarker (g, getPercentileErrorMs (0.75), colours.histogramQuartile);
-        drawMarker (g, getPercentileErrorMs (0.5), colours.histogramMedian);
+        drawMarker (g, getPercentileErrorMs (0.25), colours.histogramQuartile, 1);
+        drawMarker (g, getPercentileErrorMs (0.75), colours.histogramQuartile, 1);
+        drawMarker (g, getPercentileErrorMs (0.5), colours.histogramMedian, 0);
     }
 }

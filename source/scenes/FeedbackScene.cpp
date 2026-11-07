@@ -65,13 +65,13 @@ void FeedbackScene::paint (juce::Graphics& g)
 void FeedbackScene::resized()
 {
     constexpr int retryButtonHeight = 40;
-    constexpr int histogramWidth = 120;
+    constexpr int histogramHeight = 110;
 
     auto titleSection = getLocalBounds().withHeight (40);
     auto bodySection = getLocalBounds().withTrimmedTop (titleSection.getHeight());
     auto retryButtonSection = bodySection.removeFromBottom (retryButtonHeight);
 
-    timingHistogram.setBounds (bodySection.removeFromRight (histogramWidth));
+    timingHistogram.setBounds (bodySection.removeFromBottom (histogramHeight));
     performanceGraph.setBounds (bodySection);
     retryButton.setBounds (retryButtonSection.withSizeKeepingCentre (150, 30));
 }

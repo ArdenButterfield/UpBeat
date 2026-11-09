@@ -5,6 +5,7 @@
 #ifndef UPBEAT_BARPROGRESSDISPLAY_H
 #define UPBEAT_BARPROGRESSDISPLAY_H
 
+#include "../GameColours.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 #include <vector>
 
@@ -22,7 +23,7 @@ public:
         Learned
     };
 
-    explicit BarProgressDisplay (int numBars);
+    BarProgressDisplay (int numBars, const GameColours& colours);
 
     void setBarState (int barIndex, BarState state);
 
@@ -36,6 +37,7 @@ public:
     void paint (juce::Graphics& g) override;
 
 private:
+    const GameColours& colours;
     std::vector<BarState> barStates;
     std::vector<std::vector<bool>> successHistories;
     int currentBar = -1;

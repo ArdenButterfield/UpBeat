@@ -12,9 +12,9 @@ TitleScene::~TitleScene()
 }
 void TitleScene::paint (juce::Graphics& g)
 {
-    g.setColour (juce::Colours::darkblue);
+    g.setColour (gameState->colours.titleBackground);
     g.fillAll();
-    g.setColour (juce::Colours::white);
+    g.setColour (gameState->colours.text);
     g.setFont (24);
     g.drawText ("UpBeat", getLocalBounds(), juce::Justification::centred, 1);
 }

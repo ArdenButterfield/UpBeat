@@ -5,13 +5,14 @@
 #ifndef UPBEAT_CHARTPRACTICESCENE_H
 #define UPBEAT_CHARTPRACTICESCENE_H
 
-#include "../Audio/ChartSynthBank.h"
+#include "../Audio/ChartSynthLoader.h"
 #include "../Audio/MetronomeSynth.h"
 #include "../Chart/BarAtom.h"
 #include "../UI/BarProgressDisplay.h"
 #include "../Chart/PlaybackClock.h"
 #include "../UI/NoteLaneDisplay.h"
 #include "../UI/PlaybackControls.h"
+#include "../UI/TimingHistogram.h"
 #include "Scene.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 #include <deque>
@@ -40,6 +41,7 @@ private:
     void buttonClicked (juce::Button*) override;
     void update() override;
     void paint (juce::Graphics& g) override;
+    void paintOverChildren (juce::Graphics& g) override;
     void resized() override;
     void startGame();
     bool keyPressed (const juce::KeyPress& key) override;
@@ -48,7 +50,7 @@ private:
     double noteDurationSeconds (const ChartEvent& event) const;
 
     // Maps a time on the practice timeline to the original chart's time, via queuedBarSpans.
-    // Call with displayEventsLock held.
+    // Call with displayEventsLock held, unless on the message thread, the only one that writes them.
     double chartTimeAt (double practiceTimeMs) const;
 
     // Moves barIndex to the back of the playQueue and seeds a fresh performance-timing
@@ -67,16 +69,22 @@ private:
     PlaybackControls playbackControls;
 
     // Player hits and background notes both play on the chart synth the note belongs to.
-    ChartSynthBank synths;
+    ChartSynthLoader synthLoader;
     MetronomeSynth metronomeSynth;
 
     NoteLaneDisplay noteLaneDisplay;
     std::vector<BarAtom> bars;
+    // Built before playback starts and only read afterwards, so the audio thread can read it freely.
+    CountIn countIn;
     BarProgressDisplay barProgressDisplay;
+    TimingHistogram timingHistogram;
 
     std::deque<int> unlearnedBarQueue;
     std::deque<int> playQueue;
     long long currentBarStartMs;
+    // When the last note (playable or background) of the bars played so far stops sounding,
+    // on the practice timeline.
+    long long lastNoteEndMs = 0;
     // How many bar reps have been played through; decides which display row the next bar fills.
     int completedBarCount = 0;
 
@@ -107,8 +115,6 @@ private:
 
     std::queue<ChartEvent*> playbackQueue;
     juce::CriticalSection playbackLock;
-
-    long long countInTime;
 
     double sampleRate;
 };

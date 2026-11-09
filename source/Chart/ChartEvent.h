@@ -32,6 +32,9 @@ struct ChartEvent
     int velocity = 0;
     // The id of the chart synth a NOTE or BACKGROUND_NOTE plays on; -1 otherwise.
     int synthId = -1;
+    // Whether the metronome clicks on this BEAT. False on the beats inside each group of
+    // three in compound time, which still get beat lines on screen.
+    bool metronomeClick = true;
 
     // GUI_CHANGE: the GUI track name (e.g. "section titles") and the clip name.
     juce::String guiEventType;

@@ -261,6 +261,47 @@ TEST_CASE ("AutomationLane::valueAt ramps between points", "[chart][automation]"
     CHECK_THAT (lane.valueAt (9000.0), WithinAbs (1.0, 1e-9)); // held after the last point
 }
 
+TEST_CASE ("Chart::fromYaml limits charts to MAX_LANES lanes", "[chart]")
+{
+    auto yaml = R"(
+title: too many lanes
+lanes: 5
+synths:
+- id: 0
+  name: lead
+  group: PLAYABLE
+  state: ""
+events:
+- type: PlayableNoteEvent
+  time: 0.0
+  synth: 0
+  lane: 0
+  pitch: 60
+  velocity: 100
+  length_seconds: 0.5
+  length_beats: 1.0
+- type: PlayableNoteEvent
+  time: 0.5
+  synth: 0
+  lane: 4
+  pitch: 62
+  velocity: 100
+  length_seconds: 0.5
+  length_beats: 1.0
+)";
+
+    auto chart = Chart::fromYaml (yaml);
+    REQUIRE (chart.has_value());
+    CHECK (chart->numLanes == Chart::MAX_LANES);
+
+    auto first = chart->events.find (0);
+    auto second = chart->events.find (500);
+    REQUIRE (first != chart->events.end());
+    REQUIRE (second != chart->events.end());
+    CHECK (first->second.inputButton == 0);
+    CHECK (second->second.inputButton == Chart::MAX_LANES - 1);
+}
+
 TEST_CASE ("Chart::fromYaml groups AutomationEvents into lanes", "[chart][automation]")
 {
     auto chart = Chart::fromYaml (R"(

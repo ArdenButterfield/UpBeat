@@ -4,14 +4,37 @@
 
 #include "ChartSynthBank.h"
 
-ChartSynthBank::ChartSynthBank (const Chart& chart)
+ChartSynthBank::ChartSynthBank (const Chart& chart) : ChartSynthBank (chart, nullptr)
 {
+}
+
+ChartSynthBank::ChartSynthBank (const Chart& chart, juce::Thread& loadingThread) : ChartSynthBank (chart, &loadingThread)
+{
+}
+
+ChartSynthBank::ChartSynthBank (const Chart& chart, juce::Thread* loadingThread)
+{
+    synths.reserve (chart.synths.size());
     for (auto& chartSynth : chart.synths)
     {
+        std::optional<juce::MessageManagerLock> messageThreadLock;
+        if (loadingThread != nullptr)
+        {
+            loadingThread->wait (maxWaitForMessageThreadMs);
+            if (loadingThread->threadShouldExit())
+                return;
+
+            messageThreadLock.emplace (loadingThread);
+            if (! messageThreadLock->lockWasGained())
+                return; // loadingThread was asked to exit
+        }
+
         auto synth = std::make_unique<OdinSynth>();
         // A synth whose state can't be read still plays, with Odin's default patch.
         if (! synth->loadState (chartSynth.state))
+        {
             DBG ("Couldn't load the Odin state for chart synth " << chartSynth.name);
+        }
 
         synths.push_back ({ chartSynth.id, std::move (synth) });
     }

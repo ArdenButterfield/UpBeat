@@ -14,7 +14,7 @@
 struct AutomationPoint
 {
     double timeMs;
-    double value; // normalised, 0 to 1
+    double value; // normalised 0 to 1 for a synth parameter, the channel value for a colour
 
     bool hasCurve = false;
     // Ableton's bezier control points (x1, y1, x2, y2), in coordinates normalised to the
@@ -22,10 +22,11 @@ struct AutomationPoint
     std::array<double, 4> curve {};
 };
 
-// The automation of one Odin parameter on one chart synth.
+// The automation of one Odin parameter on one chart synth, or of one colour channel
+// (see ChartColours), which leaves synthId and parameterId unset.
 struct AutomationLane
 {
-    int synthId;
+    int synthId = -1;
     juce::String parameterId;
     // In time order. Two points at the same time form a jump.
     std::vector<AutomationPoint> points;

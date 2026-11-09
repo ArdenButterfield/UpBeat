@@ -5,6 +5,7 @@
 #ifndef UPBEAT_LINEGRAPH_H
 #define UPBEAT_LINEGRAPH_H
 
+#include "../GameColours.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 #include <optional>
 #include <vector>
@@ -12,11 +13,11 @@
 class LineGraph : public juce::Component
 {
 public:
-    LineGraph();
+    explicit LineGraph (const GameColours& colours);
     ~LineGraph() override;
 
     // Adds a new line series to the plot. xValues and yValues must be the same size.
-    // If colour is not specified, one is chosen automatically from a default palette.
+    // If colour is not specified, one is chosen automatically from the graph series palette.
     void addData (const std::vector<float>& xValues, const std::vector<float>& yValues, std::optional<juce::Colour> colour = std::nullopt);
 
     void paint (juce::Graphics& g) override;
@@ -29,6 +30,7 @@ private:
         juce::Colour colour;
     };
 
+    const GameColours& colours;
     std::vector<Series> series;
 };
 

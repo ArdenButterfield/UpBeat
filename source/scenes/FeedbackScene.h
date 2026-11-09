@@ -6,6 +6,7 @@
 #define UPBEAT_FEEDBACKSCENE_H
 #include "Scene.h"
 #include "../UI/LineGraph.h"
+#include "../UI/TimingHistogram.h"
 
 class FeedbackScene : public Scene, public juce::Button::Listener
 {
@@ -20,6 +21,8 @@ public:
 private:
     SceneIDs::SceneID desiredSceneId;
     LineGraph performanceGraph;
+    // The most recent performance's timings, under the graph of every performance.
+    TimingHistogram timingHistogram;
     juce::TextButton retryButton;
 
     void buildPerformanceGraph();

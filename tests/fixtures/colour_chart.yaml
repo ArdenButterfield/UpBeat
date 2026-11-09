@@ -1,0 +1,102 @@
+title: colour_chart
+lanes: 1
+colours:
+  row_background:
+    L: 0.1
+    a: -0.1
+    b: 0.1
+  row_outline:
+    L: 0.2
+    a: -0.08
+    b: 0.08
+  row_active_outline:
+    L: 0.3
+    a: -0.06
+    b: 0.06
+  barline:
+    L: 0.4
+    a: -0.04
+    b: 0.04
+  beat_line:
+    L: 0.5
+    a: -0.02
+    b: 0.02
+  playhead:
+    L: 0.6
+    a: 0.0
+    b: 0.0
+  lane_0:
+    L: 0.7
+    a: 0.02
+    b: -0.02
+  lane_1:
+    L: 0.8
+    a: 0.04
+    b: -0.04
+synths: []
+events:
+- type: BarEvent
+  time: 0.0
+  bar: 1
+  numerator: 4
+  denominator: 4
+- type: BeatEvent
+  time: 0.0
+  bar: 1
+  beat: 1
+- type: ColourAutomationEvent
+  time: 0.0
+  colour: playhead
+  channel: L
+  value: 0.25
+- type: ColourAutomationEvent
+  time: 0.0
+  colour: lane_0
+  channel: a
+  value: -0.2
+- type: GUIChangeEvent
+  time: 0.0
+  event_type: colours
+  value: Verse
+- type: BeatEvent
+  time: 0.5
+  bar: 1
+  beat: 2
+- type: ColourAutomationEvent
+  time: 0.5
+  colour: lane_0
+  channel: a
+  value: -0.2
+  curve:
+  - 0.25
+  - 0.0
+  - 1.0
+  - 0.0
+- type: BeatEvent
+  time: 1.0
+  bar: 1
+  beat: 3
+- type: ColourAutomationEvent
+  time: 1.0
+  colour: playhead
+  channel: L
+  value: 0.75
+- type: BeatEvent
+  time: 1.5
+  bar: 1
+  beat: 4
+- type: ColourAutomationEvent
+  time: 1.5
+  colour: lane_0
+  channel: a
+  value: 0.2
+- type: ColourAutomationEvent
+  time: 2.0
+  colour: playhead
+  channel: L
+  value: 0.75
+- type: ColourAutomationEvent
+  time: 2.0
+  colour: playhead
+  channel: L
+  value: 0.1

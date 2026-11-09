@@ -11,12 +11,27 @@
 #include <vector>
 
 // One OdinSynth per synth in a chart, each loaded with that synth's state, addressed by the
-// ChartSynth id that chart events carry. Construct on the message thread; everything else is
-// meant to be called from the audio thread.
+// ChartSynth id that chart events carry. Construct on the message thread, or on a background
+// thread via the loadingThread constructor; everything else is meant to be called from the
+// audio thread.
 class ChartSynthBank
 {
 public:
     explicit ChartSynthBank (const Chart& chart);
+
+    // Builds the bank from loadingThread, a background thread. Each Odin instance's parameter
+    // state (an AudioProcessorValueTreeState) is flushed by a timer on the message thread, so
+    // every synth is built while holding the MessageManagerLock; the message thread runs freely
+    // between synths. Stops early, leaving the bank incomplete, if loadingThread is asked to exit.
+    //
+    // Requesting that lock posts a message, and on some platforms (Windows) the message thread
+    // only paints once it has no posted messages left, so asking for the lock straight away
+    // would hold off painting until every synth had loaded. Instead, before each synth,
+    // loadingThread waits to be notified (Thread::notify, e.g. once a frame has been painted),
+    // or for maxWaitForMessageThreadMs if nothing does.
+    ChartSynthBank (const Chart& chart, juce::Thread& loadingThread);
+
+    static constexpr int maxWaitForMessageThreadMs = 200;
 
     void prepareToPlay (double sampleRate, int maximumBlockSize);
 
@@ -32,6 +47,8 @@ public:
     void renderNextBlock (juce::AudioBuffer<float>& buffer, int startSample, int numSamples);
 
 private:
+    ChartSynthBank (const Chart& chart, juce::Thread* loadingThread);
+
     struct Entry
     {
         int synthId;

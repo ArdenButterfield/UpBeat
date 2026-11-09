@@ -27,6 +27,32 @@ namespace
         juce::Base64::convertFromBase64 (decoded, base64);
         return decoded.getMemoryBlock();
     }
+
+    AutomationPoint readAutomationPoint (const YAML::Node& eventNode)
+    {
+        AutomationPoint point { eventNode["time"].as<double> (0.0) * 1000.0, eventNode["value"].as<double> (0.0) };
+        if (auto curve = eventNode["curve"]; curve && curve.IsSequence() && curve.size() == 4)
+        {
+            point.hasCurve = true;
+            for (size_t i = 0; i < 4; ++i)
+                point.curve[i] = curve[i].as<double>();
+        }
+        return point;
+    }
+
+    // Events should already be in time order; stable, so jumps keep their order regardless.
+    void sortPoints (AutomationLane& lane)
+    {
+        std::stable_sort (lane.points.begin(), lane.points.end(), [] (const AutomationPoint& a, const AutomationPoint& b) {
+            return a.timeMs < b.timeMs;
+        });
+    }
+}
+
+bool Chart::metronomeClicksOnBeat (int numerator, int denominator, int beat)
+{
+    auto compound = denominator == 8 && numerator > 3 && numerator % 3 == 0;
+    return ! compound || (beat - 1) % 3 == 0;
 }
 
 std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
@@ -54,7 +80,24 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
                 playableSynthIds.insert (synth.id);
         }
 
-        chart.numLanes = std::max (root["lanes"].as<int> (playableSynthIds.empty() ? 0 : 1), 0);
+        chart.numLanes = std::clamp (root["lanes"].as<int> (playableSynthIds.empty() ? 0 : 1), 0, MAX_LANES);
+
+        if (auto coloursNode = root["colours"]; coloursNode && coloursNode.IsMap())
+        {
+            for (int colour = 0; colour < LaneColours::numColours; ++colour)
+            {
+                auto colourNode = coloursNode[LaneColours::infos[(size_t) colour].id];
+                if (! colourNode || ! colourNode.IsMap())
+                    continue;
+
+                auto& lab = chart.colours.base[(size_t) colour];
+                for (int channel = 0; channel < LaneColours::numChannels; ++channel)
+                    lab[channel] = colourNode[LaneColours::channels[(size_t) channel].name].as<double> (lab[channel]);
+            }
+        }
+
+        // The time signature of the bar the events are in; each BarEvent comes before its beats.
+        int numerator = 4, denominator = 4;
 
         for (const auto& eventNode : root["events"])
         {
@@ -65,7 +108,7 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
             {
                 auto synthId = eventNode["synth"].as<int> (-1);
                 auto playable = type == "PlayableNoteEvent" && playableSynthIds.contains (synthId);
-                auto lane = playable ? std::max (eventNode["lane"].as<int> (0), 0) : -1;
+                auto lane = playable ? std::clamp (eventNode["lane"].as<int> (0), 0, MAX_LANES - 1) : -1;
                 if (playable)
                     chart.numLanes = std::max (chart.numLanes, lane + 1);
 
@@ -80,12 +123,19 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
             else if (type == "BarEvent")
             {
                 chart.events.insert ({ timeMs, ChartEvent (timeMs, ChartEvent::BARLINE) });
+                numerator = eventNode["numerator"].as<int> (4);
+                denominator = eventNode["denominator"].as<int> (4);
             }
             else if (type == "BeatEvent")
             {
                 // The first beat of each bar is already represented by its BarEvent.
-                if (eventNode["beat"].as<int> (0) != 1)
-                    chart.events.insert ({ timeMs, ChartEvent (timeMs, ChartEvent::BEAT) });
+                auto beat = eventNode["beat"].as<int> (0);
+                if (beat != 1)
+                {
+                    ChartEvent event (timeMs, ChartEvent::BEAT);
+                    event.metronomeClick = metronomeClicksOnBeat (numerator, denominator, beat);
+                    chart.events.insert ({ timeMs, std::move (event) });
+                }
             }
             else if (type == "AutomationEvent")
             {
@@ -98,14 +148,14 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
                 if (laneIt == chart.automation.end())
                     laneIt = chart.automation.insert (chart.automation.end(), AutomationLane { synthId, parameterId, {} });
 
-                AutomationPoint point { eventNode["time"].as<double> (0.0) * 1000.0, eventNode["value"].as<double> (0.0) };
-                if (auto curve = eventNode["curve"]; curve && curve.IsSequence() && curve.size() == 4)
-                {
-                    point.hasCurve = true;
-                    for (size_t i = 0; i < 4; ++i)
-                        point.curve[i] = curve[i].as<double>();
-                }
-                laneIt->points.push_back (point);
+                laneIt->points.push_back (readAutomationPoint (eventNode));
+            }
+            else if (type == "ColourAutomationEvent")
+            {
+                auto colour = LaneColours::findColour (eventNode["colour"].as<std::string> (std::string()));
+                auto channel = LaneColours::findChannel (eventNode["channel"].as<std::string> (std::string()));
+                if (colour && channel)
+                    chart.colours.automation[(size_t) *colour][(size_t) *channel].points.push_back (readAutomationPoint (eventNode));
             }
             else if (type == "GUIChangeEvent")
             {
@@ -116,16 +166,17 @@ std::optional<Chart> Chart::fromYaml (const juce::String& yamlText)
             }
         }
 
-        // Events should already be in time order; stable, so jumps keep their order regardless.
         for (auto& lane : chart.automation)
-            std::stable_sort (lane.points.begin(), lane.points.end(), [] (const AutomationPoint& a, const AutomationPoint& b) {
-                return a.timeMs < b.timeMs;
-            });
+            sortPoints (lane);
+        for (auto& lanes : chart.colours.automation)
+            for (auto& lane : lanes)
+                sortPoints (lane);
 
         return chart;
     }
     catch (const YAML::Exception& e)
     {
+        juce::ignoreUnused (e); // DBG compiles away in release builds
         DBG ("Failed to parse chart YAML: " << e.what());
         return std::nullopt;
     }

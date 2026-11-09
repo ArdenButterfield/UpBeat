@@ -15,8 +15,13 @@ namespace
     constexpr int toleranceLabelWidth = 80;
     constexpr int toleranceLabelHeight = 20;
 
-    // One lane takes the whole home row, two lanes split it between the hands (asdf / jkl;),
-    // and anything wider gets one home-row key per lane, left to right.
+    // Charts set colours in Oklab, with no alpha, so how see-through these are is fixed here.
+    constexpr float rowBackgroundAlpha = 0.25f;
+    constexpr float barlineAlpha = 0.3f;
+    constexpr float beatLineAlpha = 0.15f;
+    constexpr float laneLineAlpha = 0.5f;
+
+    // One lane takes the whole home row; two lanes (Chart::MAX_LANES) split it between the hands (asdf / jkl;).
     std::vector<std::vector<int>> keysForLanes (int numLanes)
     {
         if (numLanes == 1)
@@ -25,10 +30,7 @@ namespace
         if (numLanes == 2)
             return { { 65, 83, 68, 70 }, { 74, 75, 76, 59 } };
 
-        std::vector<std::vector<int>> result ((size_t) numLanes);
-        for (size_t i = 0; i < result.size() && i < homeRowKeyCodes.size(); ++i)
-            result[i] = { homeRowKeyCodes[i] };
-        return result;
+        return {};
     }
 
     bool isPlayed (const ChartEvent& event)
@@ -36,12 +38,8 @@ namespace
         return !event.performanceTimings.empty() && event.performanceTimings.back() != UNPLAYED_NOTE;
     }
 
-    // The part of a row notes, beat lines and the playhead are placed within, inset so
-    // notes at the very start or end of a bar, or at the pitch extremes, aren't clipped.
-    juce::Rectangle<float> rowInner (juce::Rectangle<int> row)
-    {
-        return row.toFloat().reduced (noteRadius + 2.f);
-    }
+    // How far notes, beat lines and the playhead are kept from a border.
+    constexpr float borderInset = noteRadius + 2.f;
 }
 
 NoteLaneDisplay::NoteLaneDisplay (GameState* gs, int numLanes_) : gameState (gs), numLanes (numLanes_)
@@ -69,6 +67,11 @@ void NoteLaneDisplay::setBars (std::vector<BarSpan> newBars, int newFirstBarNumb
 void NoteLaneDisplay::setPlayheadTimeMs (long long newTimeMs)
 {
     timeMs = newTimeMs;
+}
+
+void NoteLaneDisplay::setChartTimeMs (double newChartTimeMs)
+{
+    chartTimeMs = newChartTimeMs;
 }
 
 void NoteLaneDisplay::advance (double elapsedMs)
@@ -142,7 +145,11 @@ ChartEvent* NoteLaneDisplay::findClosestNoteForHit (int lane, long long time)
     addAndMakeVisible (label);
 
     if (closestNote != nullptr)
+    {
         closestNote->performanceTimings.back() = time - closestEventTime;
+        if (onNoteTimed)
+            onNoteTimed (time - closestEventTime);
+    }
 
     return closestNote;
 }
@@ -173,33 +180,64 @@ int NoteLaneDisplay::rowForBar (size_t barIndex) const
     return (firstBarNumber + (int) barIndex) % numRows;
 }
 
+int NoteLaneDisplay::sequenceLineForBar (size_t barIndex) const
+{
+    return (firstBarNumber + (int) barIndex) / gridColumns;
+}
+
+float NoteLaneDisplay::barOpacity (size_t barIndex) const
+{
+    auto currentBar = playheadBarIndex();
+    if (! currentBar || barIndex >= bars.size())
+        return 0.f;
+
+    auto currentLine = sequenceLineForBar (*currentBar);
+    auto line = sequenceLineForBar (barIndex);
+    if (line < currentLine || line >= currentLine + gridLines)
+        return 0.f;
+
+    // The last line shown takes the place of the line just finished, so it fades in over the
+    // first bar of the current line - except at the very start, when it replaces nothing.
+    if (line < currentLine + gridLines - 1 || currentLine == 0)
+        return 1.f;
+
+    auto lineStartIndex = currentLine * gridColumns - firstBarNumber;
+    if (lineStartIndex < 0)
+        return 1.f; // That first bar finished before these bars were handed in.
+
+    auto& firstBar = bars[(size_t) lineStartIndex];
+    auto progress = static_cast<float> (timeMs - firstBar.startMs) / static_cast<float> (std::max (1LL, firstBar.lengthMs));
+    return juce::jlimit (0.f, 1.f, progress);
+}
+
 float NoteLaneDisplay::xForTime (size_t barIndex, long long time) const
 {
     auto& bar = bars[barIndex];
     auto fraction = juce::jlimit (0.f, 1.f, static_cast<float> (time - bar.startMs) / static_cast<float> (std::max (1LL, bar.lengthMs)));
-    auto area = rowInner (rows[(size_t) rowForBar (barIndex)]);
+    auto area = rowInner (rowForBar (barIndex));
     return area.getX() + fraction * area.getWidth();
 }
 
-float NoteLaneDisplay::pitchFraction (size_t barIndex, int midiNote) const
+juce::Rectangle<float> NoteLaneDisplay::rowInner (int row) const
 {
-    if (events == nullptr)
-        return 0.5f;
+    auto area = rows[(size_t) row].toFloat().reduced (0.f, borderInset);
+    if (row % gridColumns == 0)
+        area.removeFromLeft (borderInset);
+    if (row % gridColumns == gridColumns - 1)
+        area.removeFromRight (borderInset);
+    return area;
+}
 
-    auto& bar = bars[barIndex];
-    std::vector<int> pitches;
-    for (auto it = events->lower_bound (bar.startMs); it != events->end() && it->first < bar.startMs + bar.lengthMs; ++it)
-        if (it->second->type == ChartEvent::NOTE)
-            pitches.push_back (it->second->midiNote);
+juce::Rectangle<float> NoteLaneDisplay::gridLineInner (int gridLine) const
+{
+    return gridLineBounds[(size_t) gridLine].toFloat().reduced (borderInset);
+}
 
-    std::sort (pitches.begin(), pitches.end());
-    pitches.erase (std::unique (pitches.begin(), pitches.end()), pitches.end());
-
-    if (pitches.size() <= 1)
-        return 0.5f;
-
-    auto rank = std::lower_bound (pitches.begin(), pitches.end(), midiNote) - pitches.begin();
-    return static_cast<float> (rank) / static_cast<float> (pitches.size() - 1);
+float NoteLaneDisplay::laneY (juce::Rectangle<float> area, int lane) const
+{
+    auto lanes = std::max (1, numLanes);
+    auto fraction = static_cast<float> (juce::jlimit (0, lanes - 1, lane) + 1) / static_cast<float> (lanes + 1);
+    return std::floor (area.getY() + fraction * area.getHeight()) + 0.5f;
 }
 
 std::optional<juce::Point<float>> NoteLaneDisplay::notePosition (long long eventTime, const ChartEvent& event) const
@@ -209,18 +247,16 @@ std::optional<juce::Point<float>> NoteLaneDisplay::notePosition (long long event
     if (!barIndex || !currentBar)
         return std::nullopt;
 
-    auto yFraction = pitchFraction (*barIndex, event.midiNote);
-
     // Once the playhead has passed a note, it rides along with the playhead - into the
-    // next bar's row if need be - keeping the height it had in its own bar.
+    // next bar's row if need be - staying on its lane's line.
     auto drawnBar = eventTime < timeMs ? *currentBar : *barIndex;
     auto drawnTime = eventTime < timeMs ? timeMs : eventTime;
 
-    if (drawnBar < *currentBar || drawnBar >= *currentBar + numRows)
+    if (barOpacity (drawnBar) <= 0.f)
         return std::nullopt;
 
-    auto area = rowInner (rows[(size_t) rowForBar (drawnBar)]);
-    return juce::Point<float> (xForTime (drawnBar, drawnTime), area.getBottom() - yFraction * area.getHeight());
+    auto area = rowInner (rowForBar (drawnBar));
+    return juce::Point<float> (xForTime (drawnBar, drawnTime), laneY (area, event.inputButton));
 }
 
 std::optional<juce::Point<float>> NoteLaneDisplay::playheadPosition() const
@@ -232,34 +268,30 @@ std::optional<juce::Point<float>> NoteLaneDisplay::playheadPosition() const
     return juce::Point<float> (xForTime (*currentBar, timeMs), rows[(size_t) rowForBar (*currentBar)].toFloat().getCentreY());
 }
 
-juce::Colour NoteLaneDisplay::laneColour (int lane) const
-{
-    static const std::array<juce::Colour, 10> palette {
-        juce::Colours::hotpink,
-        juce::Colours::deepskyblue,
-        juce::Colours::gold,
-        juce::Colours::limegreen,
-        juce::Colours::orange,
-        juce::Colours::mediumpurple,
-        juce::Colours::turquoise,
-        juce::Colours::tomato,
-        juce::Colours::khaki,
-        juce::Colours::lightsteelblue,
-    };
-    return palette[(size_t) std::max (0, lane) % palette.size()];
-}
-
 void NoteLaneDisplay::paint (juce::Graphics& g)
 {
     auto currentBar = playheadBarIndex();
     auto currentRow = currentBar ? rowForBar (*currentBar) : -1;
 
-    for (int i = 0; i < numRows; ++i)
+    const auto palette = gameState->currentChart->colours.paletteAt (chartTimeMs);
+    auto laneColour = [&palette] (int lane) {
+        return palette[(size_t) (LaneColours::lane0 + juce::jlimit (0, Chart::MAX_LANES - 1, lane))];
+    };
+
+    for (int i = 0; i < gridLines; ++i)
     {
-        g.setColour (juce::Colours::black.withAlpha (0.25f));
-        g.fillRect (rows[(size_t) i]);
-        g.setColour (i == currentRow ? juce::Colours::white : juce::Colours::grey);
-        g.drawRect (rows[(size_t) i], i == currentRow ? 2 : 1);
+        auto isCurrent = currentRow >= 0 && currentRow / gridColumns == i;
+        g.setColour (palette[LaneColours::rowBackground].withAlpha (rowBackgroundAlpha));
+        g.fillRect (gridLineBounds[(size_t) i]);
+        g.setColour (palette[isCurrent ? LaneColours::rowActiveOutline : LaneColours::rowOutline]);
+        g.drawRect (gridLineBounds[(size_t) i], isCurrent ? 2 : 1);
+
+        auto area = gridLineInner (i);
+        for (int lane = 0; lane < numLanes; ++lane)
+        {
+            g.setColour (laneColour (lane).withAlpha (laneLineAlpha));
+            g.drawHorizontalLine (static_cast<int> (laneY (area, lane)), area.getX(), area.getRight());
+        }
     }
 
     for (size_t i = 0; i < buttonIndicators.size(); ++i)
@@ -274,46 +306,56 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
     if (events == nullptr || !currentBar)
         return;
 
-    auto drawNote = [&] (long long eventTime, const ChartEvent& event) {
+    auto drawNote = [&] (long long eventTime, const ChartEvent& event, float opacity) {
         if (auto position = notePosition (eventTime, event))
         {
-            g.setColour (laneColour (event.inputButton));
+            g.setColour (laneColour (event.inputButton).withMultipliedAlpha (opacity));
             g.fillEllipse (juce::Rectangle<float> (noteRadius * 2.f, noteRadius * 2.f).withCentre (*position));
         }
     };
 
-    // The current bar and the ones after it that still fit on screen. Notes the playhead
-    // has already passed are left to the riding-notes pass below.
-    for (auto barIndex = *currentBar; barIndex < bars.size() && barIndex < *currentBar + numRows; ++barIndex)
+    // Every bar of the grid lines shown, from the start of the current one, so the bars
+    // already played in it keep their beat lines. Notes the playhead has already passed are
+    // left to the riding-notes pass below.
+    auto firstShownBar = (size_t) std::max (0, sequenceLineForBar (*currentBar) * gridColumns - firstBarNumber);
+    for (auto barIndex = firstShownBar; barIndex < bars.size(); ++barIndex)
     {
+        auto opacity = barOpacity (barIndex);
+        if (opacity <= 0.f)
+        {
+            if (barIndex > *currentBar)
+                break;
+            continue;
+        }
+
         auto& bar = bars[barIndex];
-        auto area = rowInner (rows[(size_t) rowForBar (barIndex)]);
+        auto area = rowInner (rowForBar (barIndex));
 
         for (auto it = events->lower_bound (bar.startMs); it != events->end() && it->first < bar.startMs + bar.lengthMs; ++it)
         {
             auto& [eventTime, event] = *it;
             if (event->type == ChartEvent::BEAT || event->type == ChartEvent::BARLINE)
             {
-                g.setColour (juce::Colours::white.withAlpha (event->type == ChartEvent::BARLINE ? 0.3f : 0.15f));
+                g.setColour (event->type == ChartEvent::BARLINE ? palette[LaneColours::barline].withAlpha (barlineAlpha * opacity) : palette[LaneColours::beatLine].withAlpha (beatLineAlpha * opacity));
                 g.drawVerticalLine (juce::roundToInt (xForTime (barIndex, eventTime)), area.getY(), area.getBottom());
             }
         }
 
         for (auto it = events->lower_bound (std::max (bar.startMs, timeMs)); it != events->end() && it->first < bar.startMs + bar.lengthMs; ++it)
             if (it->second->type == ChartEvent::NOTE && !isPlayed (*it->second))
-                drawNote (it->first, *it->second);
+                drawNote (it->first, *it->second, opacity);
     }
 
     // Unplayed notes the playhead has passed travel with it until their hit window closes.
     auto totalHitWindow = gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES - 1];
     for (auto it = events->lower_bound (timeMs - totalHitWindow); it != events->end() && it->first < timeMs; ++it)
         if (it->second->type == ChartEvent::NOTE && !isPlayed (*it->second))
-            drawNote (it->first, *it->second);
+            drawNote (it->first, *it->second, 1.f);
 
     if (barIndexAt (timeMs))
     {
         auto row = rows[(size_t) currentRow].toFloat();
-        g.setColour (juce::Colours::white);
+        g.setColour (palette[LaneColours::playhead]);
         g.drawLine (xForTime (*currentBar, timeMs), row.getY(), xForTime (*currentBar, timeMs), row.getBottom(), 2.f);
     }
 }
@@ -327,9 +369,22 @@ void NoteLaneDisplay::resized()
     auto indicatorsArea = bounds.removeFromBottom (indicatorHeight);
     bounds.removeFromBottom (rowGap);
 
-    auto rowHeight = (bounds.getHeight() - rowGap * (numRows - 1)) / numRows;
+    // Row i sits in grid column i % gridColumns and grid line i / gridColumns, so bars
+    // read left to right, then top to bottom. Grid lines have a gap between them; the rows
+    // within one touch.
+    auto rowWidth = bounds.getWidth() / gridColumns;
+    auto rowHeight = (bounds.getHeight() - rowGap * (gridLines - 1)) / gridLines;
+    for (int line = 0; line < gridLines; ++line)
+        gridLineBounds[(size_t) line] = bounds.withHeight (rowHeight).withY (bounds.getY() + line * (rowHeight + rowGap));
+
     for (int i = 0; i < numRows; ++i)
-        rows[(size_t) i] = bounds.withHeight (rowHeight).withY (bounds.getY() + i * (rowHeight + rowGap));
+    {
+        auto line = gridLineBounds[(size_t) (i / gridColumns)];
+        auto column = i % gridColumns;
+        // The last column takes any width left over from dividing the line.
+        auto width = column == gridColumns - 1 ? line.getWidth() - column * rowWidth : rowWidth;
+        rows[(size_t) i] = line.withX (line.getX() + column * rowWidth).withWidth (width);
+    }
 
     auto indicatorW = buttonIndicators.empty() ? indicatorsArea.getWidth() : indicatorsArea.getWidth() / (int) buttonIndicators.size();
     for (size_t i = 0; i < buttonIndicators.size(); ++i)

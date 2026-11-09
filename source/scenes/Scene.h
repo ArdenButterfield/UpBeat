@@ -26,6 +26,14 @@ public:
     virtual SceneIDs::SceneID getSceneID() const;
     virtual SceneIDs::SceneID getDesiredSceneID();
 protected:
+    // "Loading..." across the middle of the scene, for while it isn't ready to play.
+    void paintLoadingMessage (juce::Graphics& g) const;
+
+    // How long chart scenes keep going after their last note ends before showing the results, in
+    // real (not tempo-scaled) time, and that delay in chart time at the given tempo scale.
+    static constexpr double resultsDelayMs = 1500.0;
+    static long long resultsDelayChartMs (double tempoScale) { return static_cast<long long> (resultsDelayMs * tempoScale); }
+
     GameState* gameState;
 };
 

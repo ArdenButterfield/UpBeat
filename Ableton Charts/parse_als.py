@@ -34,6 +34,23 @@ UTILITY_DEVICE_TAG = "StereoGain"
 LEFT_LANE = 0
 RIGHT_LANE = 1
 
+# The UpBeat Colours plugin, found on a track in the GUI group, sets the chart's
+# NoteLaneDisplay colours. Its parameters are "<colour>_<channel>". These must match
+# LaneColours in source/Chart/LaneColours.h.
+COLOUR_PLUGIN_NAME = "UpBeat Colours"
+LANE_COLOUR_IDS = (
+    "row_background",
+    "row_outline",
+    "row_active_outline",
+    "barline",
+    "beat_line",
+    "playhead",
+    "lane_0",
+    "lane_1",
+)
+# Each Oklab channel's (minimum, maximum). Ableton stores automation normalised to 0 to 1.
+OKLAB_CHANNELS = {"L": (0.0, 1.0), "a": (-0.4, 0.4), "b": (-0.4, 0.4)}
+
 # Automation envelopes start with an event at this time, holding the value
 # that applies before the first real breakpoint.
 INITIAL_EVENT_TIME = -63072000
@@ -44,9 +61,10 @@ EVENT_ORDER = {
     "BarEvent": 0,
     "BeatEvent": 1,
     "AutomationEvent": 2,
-    "GUIChangeEvent": 3,
-    "BackgroundNoteEvent": 4,
-    "PlayableNoteEvent": 5,
+    "ColourAutomationEvent": 3,
+    "GUIChangeEvent": 4,
+    "BackgroundNoteEvent": 5,
+    "PlayableNoteEvent": 6,
 }
 
 DECIMALS = 6
@@ -414,8 +432,30 @@ class Synth:
     parameters: dict[str, tuple[str, str]]
 
 
+def is_plugin(device: ET.Element, name: str) -> bool:
+    return device.tag == "PluginDevice" and value_of(device, "PluginDesc/Vst3PluginInfo/Name") == name
+
+
 def is_odin(device: ET.Element) -> bool:
-    return device.tag == "PluginDevice" and value_of(device, "PluginDesc/Vst3PluginInfo/Name") == ODIN_PLUGIN_NAME
+    return is_plugin(device, ODIN_PLUGIN_NAME)
+
+
+def plugin_state(device: ET.Element) -> tuple[bytes, list[ET.Element] | None]:
+    """The plugin's own state, as passed to setStateInformation, and its PARAM elements.
+
+    The VST3 wrapper appends its own private data after the block written by
+    the plugin's getStateInformation. That block is a JUCE binary XML block:
+    a "VC2!" magic number, a 32 bit little endian size, then the XML. The PARAM
+    elements are None if the state isn't in that format.
+    """
+    processor_state = device.find("PluginDesc/Vst3PluginInfo/Preset/Vst3Preset/ProcessorState")
+    raw = bytes.fromhex(re.sub(r"\s", "", processor_state.text or ""))
+    if raw[:4] != b"VC2!":
+        return raw, None
+    size = int.from_bytes(raw[4:8], "little")
+    state = raw[: 8 + size]
+    xml = state[8:].rstrip(b"\0").decode("utf-8")
+    return state, list(ET.fromstring(xml).iter("PARAM"))
 
 
 def find_odin(track: Track) -> ET.Element | None:
@@ -442,21 +482,11 @@ def parse_synth(index: int, track: Track, group: str) -> Synth | None:
         warn(f"track '{track.name}' in {group} has no {ODIN_PLUGIN_NAME} VST3 device")
         return None
 
-    processor_state = device.find("PluginDesc/Vst3PluginInfo/Preset/Vst3Preset/ProcessorState")
-    raw = bytes.fromhex(re.sub(r"\s", "", processor_state.text or ""))
-
-    # The VST3 wrapper appends its own private data after the block written by
-    # the plugin's getStateInformation. That block is a JUCE binary XML block:
-    # a "VC2!" magic number, a 32 bit little endian size, then the XML.
-    if raw[:4] != b"VC2!":
+    state, params = plugin_state(device)
+    if params is None:
         warn(f"unexpected {ODIN_PLUGIN_NAME} state format on track '{track.name}'")
-        state = raw
-        odin_param_ids = []
-    else:
-        size = int.from_bytes(raw[4:8], "little")
-        state = raw[: 8 + size]
-        xml = state[8:].rstrip(b"\0").decode("utf-8")
-        odin_param_ids = [p.get("id") for p in ET.fromstring(xml).iter("PARAM")]
+        params = []
+    odin_param_ids = [p.get("id") for p in params]
 
     by_hash = {juce_param_hash(p): p for p in odin_param_ids}
     parameters = {}
@@ -523,6 +553,15 @@ class LaneMap:
         return RIGHT_LANE if self.balance(beat) > 0 else LEFT_LANE
 
 
+def distinct_breakpoints(envelope: ET.Element) -> list[Breakpoint]:
+    """The envelope's breakpoints, without repeats of the one before."""
+    points = []
+    for point in parse_breakpoints(envelope):
+        if not points or (point.time, point.value) != (points[-1].time, points[-1].value):
+            points.append(point)
+    return points
+
+
 def automation_events(synth: Synth, tempo: TempoMap) -> list[dict]:
     """An AutomationEvent for every breakpoint of the synth's parameter automation.
 
@@ -534,10 +573,7 @@ def automation_events(synth: Synth, tempo: TempoMap) -> list[dict]:
         if target_id not in synth.parameters:
             continue
         param_id, name = synth.parameters[target_id]
-        previous = None
-        for point in parse_breakpoints(envelope):
-            if previous is not None and (point.time, point.value) == (previous.time, previous.value):
-                continue
+        for point in distinct_breakpoints(envelope):
             event = {
                 "type": "AutomationEvent",
                 "time": tempo.seconds(point.time),
@@ -549,8 +585,81 @@ def automation_events(synth: Synth, tempo: TempoMap) -> list[dict]:
             if point.curve is not None:
                 event["curve"] = list(point.curve)
             events.append(event)
-            previous = point
     return events
+
+
+# --------------------------------------------------------------------------
+# NoteLaneDisplay colours
+
+
+def find_colour_plugin(track: Track) -> ET.Element | None:
+    for device in track.elem.findall("DeviceChain/DeviceChain/Devices/*"):
+        if is_plugin(device, COLOUR_PLUGIN_NAME):
+            return device
+    return None
+
+
+def colour_parameter_ids() -> dict[str, tuple[str, str]]:
+    """Plugin parameter id -> (colour id, channel name)."""
+    return {
+        f"{colour}_{channel}": (colour, channel)
+        for colour in LANE_COLOUR_IDS
+        for channel in OKLAB_CHANNELS
+    }
+
+
+def denormalise_channel(channel: str, value: float) -> float:
+    """A channel's Oklab value, from Ableton's normalised 0 to 1 parameter value."""
+    low, high = OKLAB_CHANNELS[channel]
+    return low + (high - low) * value
+
+
+def parse_colour_plugin(device: ET.Element, track: Track, tempo: TempoMap) -> tuple[dict, list[dict]]:
+    """The chart's "colours" section and a ColourAutomationEvent for every breakpoint.
+
+    All values are in Oklab. The state holds a parameter's real values; a colour
+    whose state is incomplete is left out, so the game uses its default.
+    """
+    parameter_ids = colour_parameter_ids()
+
+    _, params = plugin_state(device)
+    if params is None:
+        warn(f"unexpected {COLOUR_PLUGIN_NAME} state format on track '{track.name}'")
+        params = []
+    state_values = {p.get("id"): float(p.get("value")) for p in params if p.get("id") in parameter_ids}
+
+    colours = {}
+    for colour in LANE_COLOUR_IDS:
+        ids = {channel: f"{colour}_{channel}" for channel in OKLAB_CHANNELS}
+        if all(param_id in state_values for param_id in ids.values()):
+            colours[colour] = {channel: round(state_values[param_id], DECIMALS) for channel, param_id in ids.items()}
+        else:
+            warn(f"{COLOUR_PLUGIN_NAME} on track '{track.name}' has no saved value for '{colour}'; using the game's default")
+
+    by_hash = {juce_param_hash(param_id): param_id for param_id in parameter_ids}
+    targets = {}
+    for param in device.findall("ParameterList/PluginFloatParameter"):
+        param_id = by_hash.get(int(value_of(param, "ParameterId", "-1")))
+        if param_id is not None:
+            targets[param.find("ParameterValue/AutomationTarget").get("Id")] = parameter_ids[param_id]
+
+    events = []
+    for target_id, envelope in find_envelopes(track.elem).items():
+        if target_id not in targets:
+            continue
+        colour, channel = targets[target_id]
+        for point in distinct_breakpoints(envelope):
+            event = {
+                "type": "ColourAutomationEvent",
+                "time": tempo.seconds(point.time),
+                "colour": colour,
+                "channel": channel,
+                "value": round(denormalise_channel(channel, point.value), DECIMALS),
+            }
+            if point.curve is not None:
+                event["curve"] = list(point.curve)
+            events.append(event)
+    return colours, events
 
 
 # --------------------------------------------------------------------------
@@ -578,6 +687,7 @@ def build_chart(path: Path) -> dict:
     events: list[dict] = []
     end_beat = 0.0
     num_lanes = 1
+    colours = None
 
     for track in tracks:
         if track.kind == "GroupTrack":
@@ -616,6 +726,13 @@ def build_chart(path: Path) -> dict:
             events.extend(automation_events(synth, tempo))
 
         elif group == GUI_GROUP:
+            colour_plugin = find_colour_plugin(track)
+            if colour_plugin is not None:
+                if colours is None:
+                    colours, colour_events = parse_colour_plugin(colour_plugin, track, tempo)
+                    events.extend(colour_events)
+                else:
+                    warn(f"ignoring the extra {COLOUR_PLUGIN_NAME} plugin on track '{track.name}'")
             for clip in clips:
                 events.append({
                     "type": "GUIChangeEvent",
@@ -633,9 +750,13 @@ def build_chart(path: Path) -> dict:
                 event[key] = round(event[key], DECIMALS)
     events.sort(key=lambda e: (e["time"], EVENT_ORDER[e["type"]]))
 
-    return {
+    chart = {
         "title": path.stem,
         "lanes": num_lanes,
+    }
+    if colours is not None:
+        chart["colours"] = colours
+    chart.update({
         "synths": [
             {
                 "id": s.index,
@@ -646,7 +767,8 @@ def build_chart(path: Path) -> dict:
             for s in synths
         ],
         "events": events,
-    }
+    })
+    return chart
 
 
 def main() -> int:

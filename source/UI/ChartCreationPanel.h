@@ -6,6 +6,7 @@
 #define UPBEAT_CHARTCREATIONPANEL_H
 
 #include "../Chart/Chart.h"
+#include "../GameColours.h"
 #include "ChartSelectionButton.h"
 #include "juce_gui_basics/juce_gui_basics.h"
 
@@ -19,7 +20,7 @@
 class ChartCreationPanel : public juce::Component, public juce::Button::Listener
 {
 public:
-    ChartCreationPanel();
+    explicit ChartCreationPanel (const GameColours& colours);
     ~ChartCreationPanel() override;
 
     void paint (juce::Graphics& g) override;
@@ -32,6 +33,8 @@ public:
     std::function<void()> onCancel;
 
 private:
+    const GameColours& colours;
+
     struct ChartSource
     {
         juce::String name;

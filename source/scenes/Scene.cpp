@@ -34,4 +34,9 @@ SceneIDs::SceneID Scene::getSceneID() const
 SceneIDs::SceneID Scene::getDesiredSceneID()
 {
     return SceneIDs::NO_SCENE;
+}void Scene::paintLoadingMessage (juce::Graphics& g) const
+{
+    g.setColour (gameState->colours.text);
+    g.setFont (24.0f);
+    g.drawText ("Loading...", getLocalBounds(), juce::Justification::centred);
 }

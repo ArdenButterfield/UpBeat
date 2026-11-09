@@ -13,7 +13,7 @@ namespace
     constexpr int margin = 10;
 }
 
-ChartCreationPanel::ChartCreationPanel()
+ChartCreationPanel::ChartCreationPanel (const GameColours& colours_) : colours (colours_)
 {
     for (auto& entry : BundledResources::listEntries ("default_charts/yaml"))
         if (entry.endsWithIgnoreCase (".yaml") || entry.endsWithIgnoreCase (".yml"))
@@ -23,7 +23,7 @@ ChartCreationPanel::ChartCreationPanel()
     addAndMakeVisible (uploadButton);
     uploadButton.addListener (this);
 
-    errorLabel.setColour (juce::Label::textColourId, juce::Colours::red);
+    errorLabel.setColour (juce::Label::textColourId, colours.errorText);
     addAndMakeVisible (errorLabel);
 
     addAndMakeVisible (cancelButton);
@@ -103,8 +103,8 @@ void ChartCreationPanel::buttonClicked (juce::Button* b)
 
 void ChartCreationPanel::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colours::black.withAlpha (0.9f));
-    g.setColour (juce::Colours::white);
+    g.fillAll (colours.panelBackground);
+    g.setColour (colours.text);
     g.setFont (20);
 
     g.drawText ("Chart Files", getLocalBounds().reduced (margin).withHeight (30), juce::Justification::centred, 1);

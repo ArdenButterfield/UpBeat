@@ -13,21 +13,6 @@ namespace
     constexpr float rightMargin = 15.0f;
     constexpr int desiredTickCount = 6;
 
-    const std::array<juce::Colour, 8>& getDefaultPalette()
-    {
-        static const std::array<juce::Colour, 8> palette {
-            juce::Colours::red,
-            juce::Colours::dodgerblue,
-            juce::Colours::limegreen,
-            juce::Colours::orange,
-            juce::Colours::mediumpurple,
-            juce::Colours::cyan,
-            juce::Colours::yellow,
-            juce::Colours::hotpink
-        };
-        return palette;
-    }
-
     // Rounds a range to a "nice" value (1, 2, 5, or 10 times a power of ten).
     double niceNum (double range, bool round)
     {
@@ -86,7 +71,7 @@ namespace
     }
 }
 
-LineGraph::LineGraph()
+LineGraph::LineGraph (const GameColours& colours_) : colours (colours_)
 {
 }
 
@@ -101,7 +86,7 @@ void LineGraph::addData (const std::vector<float>& xValues, const std::vector<fl
     Series newSeries;
     newSeries.xValues = xValues;
     newSeries.yValues = yValues;
-    newSeries.colour = colour.has_value() ? *colour : getDefaultPalette()[series.size() % getDefaultPalette().size()];
+    newSeries.colour = colour.has_value() ? *colour : colours.graphSeriesPalette[series.size() % colours.graphSeriesPalette.size()];
     series.push_back (std::move (newSeries));
 
     repaint();
@@ -109,11 +94,11 @@ void LineGraph::addData (const std::vector<float>& xValues, const std::vector<fl
 
 void LineGraph::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colours::black);
+    g.fillAll (colours.graphBackground);
 
     auto plotArea = getLocalBounds().toFloat().withTrimmedLeft (leftMargin).withTrimmedBottom (bottomMargin).withTrimmedTop (topMargin).withTrimmedRight (rightMargin);
 
-    g.setColour (juce::Colours::white);
+    g.setColour (colours.graphForeground);
     g.drawRect (plotArea, 1.0f);
 
     if (series.empty())
@@ -156,7 +141,7 @@ void LineGraph::paint (juce::Graphics& g)
     };
 
     g.setFont (12.0f);
-    g.setColour (juce::Colours::white);
+    g.setColour (colours.graphForeground);
 
     for (auto x : xTicks)
     {

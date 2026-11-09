@@ -10,16 +10,23 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
     : Scene (gs),
       startButton ("Start"),
       playbackControls (gs->currentChart->tempoScale),
-      synths (*gs->currentChart),
+      synthLoader (*gs->currentChart),
       noteLaneDisplay (gs, gs->currentChart->numLanes),
       bars (BarAtom::splitIntoBars (*gs->currentChart)),
-      barProgressDisplay (static_cast<int> (bars.size())),
+      countIn (bars.front()),
+      barProgressDisplay (static_cast<int> (bars.size()), gs->colours),
+      timingHistogram (*gs),
       playing (false),
-      desiredSceneId (SceneIDs::CHART_PRACTICE_SCENE),
-      countInTime (gs->currentChart->countInTime)
+      desiredSceneId (SceneIDs::CHART_PRACTICE_SCENE)
 {
-    addAndMakeVisible (startButton);
+    // Hidden, with "Loading..." in its place, until the synths have loaded.
+    addChildComponent (startButton);
     startButton.addListener (this);
+    synthLoader.onLoaded = [this]
+    {
+        startButton.setVisible (true);
+        repaint();
+    };
 
     clock.setTempoScale (gameState->currentChart->tempoScale);
     playbackControls.onTempoScaleChange = [this] (double tempoScale)
@@ -33,8 +40,11 @@ ChartPracticeScene::ChartPracticeScene (GameState* gs)
 
     addAndMakeVisible (barProgressDisplay);
 
+    noteLaneDisplay.onNoteTimed = [this] (long long errorMs) { timingHistogram.addTiming (errorMs); };
+    addAndMakeVisible (timingHistogram);
+
     setWantsKeyboardFocus (true);
-    audioChartTimeMs = static_cast<double> (-countInTime);
+    audioChartTimeMs = static_cast<double> (-countIn.lengthMs);
 }
 
 ChartPracticeScene::~ChartPracticeScene()
@@ -44,12 +54,15 @@ ChartPracticeScene::~ChartPracticeScene()
 void ChartPracticeScene::prepareToPlay (double _sampleRate, int samplesPerBlock)
 {
     sampleRate = _sampleRate;
-    synths.prepareToPlay (sampleRate, samplesPerBlock);
+    synthLoader.prepareToPlay (sampleRate, samplesPerBlock);
     metronomeSynth.prepareToPlay (sampleRate);
 }
 
 void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, juce::MidiBuffer&)
 {
+    // nullptr until the synths have loaded; the game can't start before then.
+    auto* synths = synthLoader.getSynths();
+
     auto lock = juce::ScopedTryLock (playbackLock);
     if (lock.isLocked())
     {
@@ -57,7 +70,8 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
         {
             auto e = playbackQueue.front();
             playbackQueue.pop();
-            synths.noteOn (e->synthId, e->midiNote, e->velocity, noteDurationSeconds (*e));
+            if (synths != nullptr)
+                synths->noteOn (e->synthId, e->midiNote, e->velocity, noteDurationSeconds (*e));
         }
     }
 
@@ -67,22 +81,27 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
         auto bufferStartTime = static_cast<long long> (std::floor (audioChartTimeMs));
         auto bufferEndTime = static_cast<long long> (std::floor (audioChartTimeMs + bufferChartMs));
 
+        for (auto click = countIn.clicks.lower_bound (bufferStartTime); click != countIn.clicks.end() && click->first < bufferEndTime; ++click)
+            metronomeSynth.noteOn (click->second.type == ChartEvent::BARLINE ? MetronomeSynth::BARLINE : MetronomeSynth::BEAT);
+
         auto displayLock = juce::ScopedTryLock (displayEventsLock);
         if (displayLock.isLocked())
         {
-            synths.applyAutomation (chartTimeAt (audioChartTimeMs));
+            if (synths != nullptr)
+                synths->applyAutomation (chartTimeAt (audioChartTimeMs));
 
             for (auto event = displayEvents.lower_bound (bufferStartTime); event != displayEvents.end() && event->first < bufferEndTime; ++event)
             {
                 if (event->second->type == ChartEvent::BACKGROUND_NOTE)
                 {
-                    synths.noteOn (event->second->synthId, event->second->midiNote, event->second->velocity, noteDurationSeconds (*event->second));
+                    if (synths != nullptr)
+                        synths->noteOn (event->second->synthId, event->second->midiNote, event->second->velocity, noteDurationSeconds (*event->second));
                 }
                 else if (event->second->type == ChartEvent::BARLINE)
                 {
                     metronomeSynth.noteOn (MetronomeSynth::BARLINE);
                 }
-                else if (event->second->type == ChartEvent::BEAT)
+                else if (event->second->type == ChartEvent::BEAT && event->second->metronomeClick)
                 {
                     metronomeSynth.noteOn (MetronomeSynth::BEAT);
                 }
@@ -92,11 +111,13 @@ void ChartPracticeScene::processBlock (juce::AudioBuffer<float>& audio_buffer, j
     }
     else
     {
-        synths.applyAutomation (static_cast<double> (-countInTime));
-        audioChartTimeMs = static_cast<double> (-countInTime);
+        if (synths != nullptr)
+            synths->applyAutomation (static_cast<double> (-countIn.lengthMs));
+        audioChartTimeMs = static_cast<double> (-countIn.lengthMs);
     }
 
-    synths.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
+    if (synths != nullptr)
+        synths->renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
     metronomeSynth.renderNextBlock (audio_buffer, 0, audio_buffer.getNumSamples());
 }
 
@@ -149,6 +170,9 @@ void ChartPracticeScene::advanceBarQueue()
     auto barIndex = playQueue.front();
     playQueue.pop_front();
     auto& bar = bars[(size_t) barIndex];
+    for (auto& [t, event] : bar.events)
+        if (event.type == ChartEvent::NOTE || event.type == ChartEvent::BACKGROUND_NOTE)
+            lastNoteEndMs = std::max (lastNoteEndMs, currentBarStartMs + t + event.lengthMs);
     currentBarStartMs += bar.lengthMs;
     ++completedBarCount;
 
@@ -225,10 +249,12 @@ void ChartPracticeScene::startGame()
 {
     startButton.setVisible (false);
     playing = true;
-    timeMs = -countInTime;
+    timeMs = -countIn.lengthMs;
     currentBarStartMs = 0;
+    lastNoteEndMs = 0;
     completedBarCount = 0;
-    clock.start (countInTime);
+    timingHistogram.reset();
+    clock.start (countIn.lengthMs);
     grabKeyboardFocus();
 
     unlearnedBarQueue.clear();
@@ -259,19 +285,30 @@ void ChartPracticeScene::update()
             advanceBarQueue();
         }
 
-        if (playQueue.empty())
+        if (playQueue.empty() && timeMs >= lastNoteEndMs + resultsDelayChartMs (clock.getTempoScale()))
         {
             desiredSceneId = SceneIDs::CHART_FEEDBACK_SCENE;
         }
     }
 
     noteLaneDisplay.setPlayheadTimeMs (timeMs);
+    noteLaneDisplay.setChartTimeMs (chartTimeAt (static_cast<double> (timeMs)));
     noteLaneDisplay.advance (elapsed);
 }
 
 void ChartPracticeScene::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colours::darkgrey);
+    g.fillAll (gameState->colours.playBackground);
+}
+
+void ChartPracticeScene::paintOverChildren (juce::Graphics& g)
+{
+    if (! synthLoader.isLoaded())
+    {
+        paintLoadingMessage (g);
+        // Lets the loader take the message thread for its next synth, now the scene is on screen.
+        synthLoader.framePainted();
+    }
 }
 
 void ChartPracticeScene::resized()
@@ -281,11 +318,14 @@ void ChartPracticeScene::resized()
 
     constexpr int controlsWidth = 70;
     constexpr int progressWidth = 100;
+    constexpr int histogramHeight = 110;
     auto bounds = getLocalBounds().reduced (10, 20);
     playbackControls.setBounds (bounds.removeFromLeft (controlsWidth));
     bounds.removeFromLeft (10);
     barProgressDisplay.setBounds (bounds.removeFromRight (progressWidth));
     bounds.removeFromRight (10);
+    timingHistogram.setBounds (bounds.removeFromBottom (histogramHeight));
+    bounds.removeFromBottom (10);
     noteLaneDisplay.setBounds (bounds);
 }
 

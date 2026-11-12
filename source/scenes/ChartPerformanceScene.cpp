@@ -3,6 +3,7 @@
 //
 
 #include "ChartPerformanceScene.h"
+#include "../Chart/MetronomeClicks.h"
 
 #include "../Chart/BarAtom.h"
 
@@ -165,6 +166,12 @@ void ChartPerformanceScene::update()
     noteLaneDisplay.setPlayheadTimeMs (timeMs);
     noteLaneDisplay.setChartTimeMs (static_cast<double> (timeMs));
     noteLaneDisplay.advance (elapsed);
+
+    std::optional<double> sinceBeat;
+    if (playing)
+        if (auto click = MetronomeClicks::latestAtOrBefore (countIn.clicks, gameState->currentChart->events, timeMs))
+            sinceBeat = static_cast<double> (timeMs - *click) / clock.getTempoScale();
+    timingHistogram.setTimeSinceBeatMs (sinceBeat);
 }
 
 void ChartPerformanceScene::paint (juce::Graphics& g)

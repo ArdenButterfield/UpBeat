@@ -1,6 +1,7 @@
 #include <BundledResources.h>
 #include <scenes/ChartPerformanceScene.h>
 #include <scenes/ChartPracticeScene.h>
+#include <Chart/MetronomeClicks.h>
 #include <UI/TimingHistogram.h>
 
 #include <catch2/catch_test_macros.hpp>
@@ -368,4 +369,74 @@ TEST_CASE ("The performance scene shows a timing histogram", "[histogram][scene]
 TEST_CASE ("The practice scene shows a timing histogram", "[histogram][scene]")
 {
     checkSceneHistogram<ChartPracticeScene>();
+}
+
+TEST_CASE ("TimingHistogram's curve smooths its counts", "[histogram][curve]")
+{
+    GameState state;
+    TimingHistogram histogram (state);
+    CHECK (histogram.smoothedCountAt (0.0) == 0.0);
+
+    for (int i = 0; i < 10; ++i)
+        histogram.addTiming (2);
+
+    // Spread out, the curve peaks below the bar it smooths, and falls away either side.
+    auto peak = histogram.smoothedCountAt (2.5);
+    CHECK (peak < 10.0);
+    CHECK (peak > 0.0);
+    CHECK (histogram.smoothedCountAt (20.0) < peak);
+    CHECK_THAT (histogram.smoothedCountAt (-15.0), WithinAbs (histogram.smoothedCountAt (20.0), 1e-9));
+
+    // The hits are all still under the curve.
+    auto total = 0.0;
+    for (auto error = -140.0; error < 140.0; error += 1.0)
+        total += histogram.smoothedCountAt (error);
+    CHECK_THAT (total / TimingHistogram::binWidthMs, WithinAbs (10.0, 0.01));
+}
+
+TEST_CASE ("TimingHistogram's curve pulses with the metronome", "[histogram][curve]")
+{
+    GameState state;
+    TimingHistogram histogram (state);
+
+    histogram.setTimeSinceBeatMs (0.0);
+    CHECK (histogram.getBeatPulse() == 1.0f);
+
+    histogram.setTimeSinceBeatMs (100.0);
+    auto fading = histogram.getBeatPulse();
+    CHECK (fading < 1.0f);
+    CHECK (fading > 0.0f);
+
+    histogram.setTimeSinceBeatMs (400.0);
+    CHECK (histogram.getBeatPulse() < fading);
+
+    histogram.setTimeSinceBeatMs (std::nullopt);
+    CHECK (histogram.getBeatPulse() == 0.0f);
+}
+
+TEST_CASE ("The latest metronome click is found among clicking events", "[histogram][curve]")
+{
+    std::multimap<long long, ChartEvent> countIn;
+    countIn.insert ({ -1000, ChartEvent (-1000, ChartEvent::BARLINE) });
+    countIn.insert ({ -500, ChartEvent (-500, ChartEvent::BEAT) });
+
+    std::multimap<long long, ChartEvent> chart;
+    chart.insert ({ 0, ChartEvent (0, ChartEvent::BARLINE) });
+    chart.insert ({ 300, ChartEvent (300, ChartEvent::BEAT) });
+    chart.find (300)->second.metronomeClick = false;
+    chart.insert ({ 400, ChartEvent (400, ChartEvent::NOTE) });
+    chart.insert ({ 600, ChartEvent (600, ChartEvent::BEAT) });
+
+    CHECK_FALSE (MetronomeClicks::latestAtOrBefore (countIn, chart, -1001).has_value());
+    CHECK (MetronomeClicks::latestAtOrBefore (countIn, chart, -200) == -500);
+    CHECK (MetronomeClicks::latestAtOrBefore (countIn, chart, 0) == 0);
+    // A beat that doesn't click, and a note, are passed over.
+    CHECK (MetronomeClicks::latestAtOrBefore (countIn, chart, 599) == 0);
+    CHECK (MetronomeClicks::latestAtOrBefore (countIn, chart, 600) == 600);
+
+    // Events held by pointer, as practice mode's are.
+    std::multimap<long long, ChartEvent*> pointers;
+    for (auto& [time, event] : chart)
+        pointers.insert ({ time, &event });
+    CHECK (MetronomeClicks::latestAtOrBefore (countIn, pointers, 599) == 0);
 }

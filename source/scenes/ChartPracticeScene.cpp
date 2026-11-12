@@ -3,6 +3,7 @@
 //
 
 #include "ChartPracticeScene.h"
+#include "../Chart/MetronomeClicks.h"
 
 #include <cstdlib>
 
@@ -297,6 +298,13 @@ void ChartPracticeScene::update()
     noteLaneDisplay.setPlayheadTimeMs (timeMs);
     noteLaneDisplay.setChartTimeMs (chartTimeAt (static_cast<double> (timeMs)));
     noteLaneDisplay.advance (elapsed);
+
+    // displayEvents is only ever changed on this thread, so it can be read here without the lock.
+    std::optional<double> sinceBeat;
+    if (playing)
+        if (auto click = MetronomeClicks::latestAtOrBefore (countIn.clicks, displayEvents, timeMs))
+            sinceBeat = static_cast<double> (timeMs - *click) / clock.getTempoScale();
+    timingHistogram.setTimeSinceBeatMs (sinceBeat);
 }
 
 void ChartPracticeScene::paint (juce::Graphics& g)

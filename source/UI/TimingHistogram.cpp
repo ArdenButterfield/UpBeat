@@ -11,6 +11,14 @@ namespace
     constexpr int numMarkerLabelRows = 2;
     constexpr float markerLabelWidth = 60.f;
 
+    // The smoothing curve spreads each bin's count over a bell curve this wide (its standard
+    // deviation), and is sampled this often across the plot.
+    constexpr double smoothingWidthMs = 2.5 * TimingHistogram::binWidthMs;
+    constexpr double curveStepMs = 1.0;
+    // On a click the curve is this much taller, settling back over roughly this long.
+    constexpr float beatPulseDepth = 0.3f;
+    constexpr double beatPulseDecayMs = 150.0;
+
     juce::String formatMs (long long ms)
     {
         return juce::String (ms > 0 ? "+" : "") + juce::String (ms) + " ms";
@@ -44,6 +52,32 @@ void TimingHistogram::reset()
     count = 0;
     totalErrorMs = 0;
     repaint();
+}
+
+void TimingHistogram::setTimeSinceBeatMs (std::optional<double> realMs)
+{
+    auto pulse = realMs ? static_cast<float> (std::exp (-std::max (0.0, *realMs) / beatPulseDecayMs)) : 0.f;
+    if (pulse == beatPulse)
+        return;
+
+    beatPulse = pulse;
+    if (count > 0)
+        repaint();
+}
+
+double TimingHistogram::smoothedCountAt (double errorMs) const
+{
+    auto total = 0.0;
+    for (size_t bin = 0; bin < bins.size(); ++bin)
+    {
+        if (bins[bin] == 0)
+            continue;
+        auto centre = ((double) bin + 0.5) * binWidthMs - (double) rangeMs();
+        auto distance = (errorMs - centre) / smoothingWidthMs;
+        total += bins[bin] * std::exp (-0.5 * distance * distance);
+    }
+    // Scaled so a bin's spread-out hits add back up to its count across the bins they cover.
+    return total * binWidthMs / (smoothingWidthMs * std::sqrt (2.0 * juce::MathConstants<double>::pi));
 }
 
 double TimingHistogram::getMeanErrorMs() const
@@ -127,6 +161,76 @@ juce::Rectangle<float> TimingHistogram::getBarBounds (int bin) const
     return { left, plot.getBottom() - height, right - left - gap, height };
 }
 
+juce::Path TimingHistogram::curvePath (bool closed) const
+{
+    juce::Path path;
+    auto largest = *std::max_element (bins.begin(), bins.end());
+    if (largest == 0)
+        return path;
+
+    auto plot = getPlotArea();
+    auto scale = plot.getHeight() * (1.f + beatPulseDepth * beatPulse) / static_cast<float> (largest);
+    auto range = static_cast<double> (rangeMs());
+
+    // (Path::isEmpty can't tell whether the curve has started: it stays true until a line is drawn.)
+    auto started = closed;
+    if (closed)
+        path.startNewSubPath (xForError (-range), plot.getBottom());
+    for (auto error = -range; error <= range; error += curveStepMs)
+    {
+        juce::Point<float> point (xForError (error), plot.getBottom() - static_cast<float> (smoothedCountAt (error)) * scale);
+        if (started)
+            path.lineTo (point);
+        else
+            path.startNewSubPath (point);
+        started = true;
+    }
+    if (closed)
+    {
+        path.lineTo (xForError (range), plot.getBottom());
+        path.closeSubPath();
+    }
+    return path;
+}
+
+void TimingHistogram::drawCurve (juce::Graphics& g, bool fill) const
+{
+    auto path = curvePath (fill);
+    if (path.isEmpty())
+        return;
+
+    // Each stretch of the curve takes the colour of the tolerance category beneath it. The
+    // categories' edges, from the earliest error to the latest.
+    std::vector<double> edges { -(double) rangeMs() };
+    for (int i = GameState::NUM_TOLERANCE_CATEGORIES - 2; i >= 0; --i)
+        edges.push_back (-(double) gameState.tolerances[(size_t) i]);
+    for (int i = 0; i < GameState::NUM_TOLERANCE_CATEGORIES - 1; ++i)
+        edges.push_back ((double) gameState.tolerances[(size_t) i]);
+    edges.push_back ((double) rangeMs());
+
+    auto bounds = getLocalBounds();
+    for (size_t i = 0; i + 1 < edges.size(); ++i)
+    {
+        auto left = i == 0 ? bounds.getX() : juce::roundToInt (xForError (edges[i]));
+        auto right = i + 2 == edges.size() ? bounds.getRight() : juce::roundToInt (xForError (edges[i + 1]));
+        auto colour = gameState.colours.histogramBars[(size_t) categoryForError ((edges[i] + edges[i + 1]) / 2.0)];
+
+        juce::Graphics::ScopedSaveState state (g);
+        // Whole-pixel edges, so neighbouring stretches meet without overlapping.
+        g.reduceClipRegion (bounds.withLeft (left).withRight (right));
+        if (fill)
+        {
+            g.setColour (colour.withMultipliedAlpha (0.5f));
+            g.fillPath (path);
+        }
+        else
+        {
+            g.setColour (colour);
+            g.strokePath (path, juce::PathStrokeType (2.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    }
+}
+
 void TimingHistogram::paint (juce::Graphics& g)
 {
     auto& colours = gameState.colours;
@@ -153,6 +257,9 @@ void TimingHistogram::paint (juce::Graphics& g)
         for (auto sign : { -1.0, 1.0 })
             g.drawVerticalLine (juce::roundToInt (xForError (sign * (double) gameState.tolerances[(size_t) i])), plot.getY(), plot.getBottom());
 
+    // The curve's fill sits behind the bars, and its line over them.
+    drawCurve (g, true);
+
     for (int bin = 0; bin < getNumBins(); ++bin)
     {
         auto bar = getBarBounds (bin);
@@ -162,6 +269,8 @@ void TimingHistogram::paint (juce::Graphics& g)
         g.setColour (colours.histogramBars[(size_t) categoryForError (centre)]);
         g.fillRect (bar);
     }
+
+    drawCurve (g, false);
 
     g.setColour (colours.histogramAxis);
     g.drawVerticalLine (juce::roundToInt (xForError (0.0)), plot.getY(), plot.getBottom());

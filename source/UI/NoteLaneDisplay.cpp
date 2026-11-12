@@ -12,8 +12,8 @@ namespace
     constexpr std::array<int, 10> homeRowKeyCodes = { 65, 83, 68, 70, 71, 72, 74, 75, 76, 59 };
 
     constexpr float noteRadius = 7.f;
-    constexpr int toleranceLabelWidth = 80;
-    constexpr int toleranceLabelHeight = 20;
+    constexpr int toleranceLabelWidth = 80;  // the hit images are fitted inside this, keeping their shape
+    constexpr int toleranceLabelHeight = 44;
 
     // Charts set colours in Oklab, with no alpha, so how see-through these are is fixed here.
     constexpr float rowBackgroundAlpha = 0.25f;
@@ -66,7 +66,37 @@ void NoteLaneDisplay::setBars (std::vector<BarSpan> newBars, int newFirstBarNumb
 
 void NoteLaneDisplay::setPlayheadTimeMs (long long newTimeMs)
 {
+    // The playhead only goes back when a new run starts, whose notes all need checking for misses.
+    if (newTimeMs < timeMs)
+        missesLabelledBeforeMs = std::numeric_limits<long long>::min();
+
     timeMs = newTimeMs;
+}
+
+void NoteLaneDisplay::labelMissedNotesBefore (long long time)
+{
+    if (events == nullptr || time <= missesLabelledBeforeMs)
+        return;
+
+    for (auto it = events->lower_bound (missesLabelledBeforeMs); it != events->end() && it->first < time; ++it)
+    {
+        auto& [eventTime, event] = *it;
+        if (event->type == ChartEvent::NOTE && !event->performanceTimings.empty() && !isPlayed (*event))
+        {
+            auto position = notePosition (eventTime, *event);
+            addToleranceLabel (GameState::NUM_TOLERANCE_CATEGORIES, position ? position : playheadPosition());
+        }
+    }
+
+    missesLabelledBeforeMs = time;
+}
+
+void NoteLaneDisplay::addToleranceLabel (int category, std::optional<juce::Point<float>> centre)
+{
+    auto* label = toleranceLabels.add (new ToleranceLabel (category));
+    label->setBounds (juce::Rectangle<int> (toleranceLabelWidth, toleranceLabelHeight)
+                          .withCentre (centre.value_or (getLocalBounds().getCentre().toFloat()).toInt()));
+    addAndMakeVisible (label);
 }
 
 void NoteLaneDisplay::setChartTimeMs (double newChartTimeMs)
@@ -78,6 +108,8 @@ void NoteLaneDisplay::advance (double elapsedMs)
 {
     for (auto& indicator : indicatorLighting)
         indicator = std::max (0.f, indicator - static_cast<float> (elapsedMs) * 0.001f);
+
+    labelMissedNotesBefore (timeMs - gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES - 1]);
 
     for (int i = toleranceLabels.size() - 1; i >= 0; --i)
     {
@@ -134,18 +166,12 @@ ChartEvent* NoteLaneDisplay::findClosestNoteForHit (int lane, long long time)
         }
     }
 
-    auto* message = gameState->getMessage (closeness);
-
-    // The label takes the hit note's place on screen (found before the note is marked
-    // played); a key press that hit nothing is labelled at the playhead.
-    auto labelCentre = closestNote != nullptr ? notePosition (closestEventTime, *closestNote) : playheadPosition();
-    auto* label = toleranceLabels.add (new ToleranceLabel (*message));
-    label->setBounds (juce::Rectangle<int> (toleranceLabelWidth, toleranceLabelHeight)
-                          .withCentre (labelCentre.value_or (getLocalBounds().getCentre().toFloat()).toInt()));
-    addAndMakeVisible (label);
-
+    // A key press that hits no note isn't labelled: misses are labelled on the notes that
+    // were never hit, once their hit window closes (see labelMissedNotesBefore).
     if (closestNote != nullptr)
     {
+        // The label takes the hit note's place on screen (found before the note is marked played).
+        addToleranceLabel (gameState->getCategory (closeness), notePosition (closestEventTime, *closestNote));
         closestNote->performanceTimings.back() = time - closestEventTime;
         if (onNoteTimed)
             onNoteTimed (time - closestEventTime);

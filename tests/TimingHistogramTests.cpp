@@ -122,7 +122,7 @@ TEST_CASE ("TimingHistogram sorts errors into bins across the hit window", "[his
 TEST_CASE ("TimingHistogram bins follow the game's tolerances", "[histogram]")
 {
     GameState state;
-    state.tolerances = { 10, 20, 50, 400 };
+    state.tolerances = { 10, 50, 400 };
     TimingHistogram histogram (state);
     CHECK (histogram.getNumBins() == 2 * 400 / TimingHistogram::binWidthMs);
 }
@@ -292,7 +292,7 @@ TEST_CASE ("TimingHistogram colours bars by tolerance category", "[histogram]")
     TimingHistogram histogram (state);
     histogram.setSize (600, 120);
 
-    // A hit in the middle of each category - Perfect, Great, Good and Ok - alternately
+    // A hit in the middle of each category - 100, Fresh and Ok - alternately
     // early and late.
     std::vector<long long> errors;
     for (int i = 0; i < GameState::NUM_TOLERANCE_CATEGORIES; ++i)

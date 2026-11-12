@@ -20,7 +20,7 @@ public:
     long long chartStartMs; // where the bar starts in the original chart
     long long lengthMs;
     int learnedScore = 0;
-    std::vector<bool> successHistory; // one entry per practice rep: true if every note was Great or Perfect
+    std::vector<bool> successHistory; // one entry per practice rep: true if every note was Fresh or 100
     std::multimap<long long, ChartEvent> events;
 
     // Splits a chart into consecutive bars at its BARLINE events, with each bar's event

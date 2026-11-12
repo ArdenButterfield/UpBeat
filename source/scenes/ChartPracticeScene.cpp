@@ -170,13 +170,16 @@ void ChartPracticeScene::advanceBarQueue()
     auto barIndex = playQueue.front();
     playQueue.pop_front();
     auto& bar = bars[(size_t) barIndex];
+    // The bar's notes leave the display (and can no longer be hit) once it's rebuilt below,
+    // even those whose hit window is still open, so they're labelled as missed now.
+    noteLaneDisplay.labelMissedNotesBefore (currentBarStartMs + bar.lengthMs);
     for (auto& [t, event] : bar.events)
         if (event.type == ChartEvent::NOTE || event.type == ChartEvent::BACKGROUND_NOTE)
             lastNoteEndMs = std::max (lastNoteEndMs, currentBarStartMs + t + event.lengthMs);
     currentBarStartMs += bar.lengthMs;
     ++completedBarCount;
 
-    bool allGreatOrPerfect = true;
+    bool allFreshOr100 = true;
     for (auto& [t, event] : bar.events)
     {
         if (event.type != ChartEvent::NOTE)
@@ -185,15 +188,15 @@ void ChartPracticeScene::advanceBarQueue()
         auto& timings = event.performanceTimings;
         if (timings.empty() || timings.back() == UNPLAYED_NOTE || std::abs (timings.back()) >= gameState->tolerances[1])
         {
-            allGreatOrPerfect = false;
+            allFreshOr100 = false;
             break;
         }
     }
 
-    bar.successHistory.push_back (allGreatOrPerfect);
+    bar.successHistory.push_back (allFreshOr100);
     barProgressDisplay.setSuccessHistory (barIndex, bar.successHistory);
 
-    if (allGreatOrPerfect)
+    if (allFreshOr100)
     {
         bar.learnedScore += 1;
     } else

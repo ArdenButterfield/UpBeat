@@ -60,11 +60,17 @@ public:
     // separate from the playhead because the event map may use another timeline (see above).
     void setChartTimeMs (double newChartTimeMs);
 
-    // Decays key-hit lighting and ages/removes tolerance labels. Call once per frame.
+    // Decays key-hit lighting, ages/removes tolerance labels, and labels notes whose hit
+    // window has closed without them being hit as missed. Call once per frame.
     void advance (double elapsedMs);
 
+    // Labels every unplayed note before time (in the event map's time coordinates) as missed,
+    // unless it already has been. advance does this as hit windows close; call it directly
+    // before notes are taken out of the event map while they could still be hit.
+    void labelMissedNotesBefore (long long time);
+
     // Looks up the lane for this key, finds the closest unplayed note in tolerance,
-    // records the hit (or miss) on it, and returns it so the caller can trigger playback -
+    // records the hit on it, and returns it so the caller can trigger playback -
     // or nullptr if the key isn't mapped to a lane.
     ChartEvent* registerKeyPress (const juce::KeyPress& key, long long hitTimeMs);
 
@@ -77,6 +83,8 @@ public:
 
 private:
     ChartEvent* findClosestNoteForHit (int lane, long long time);
+    // Shows a tolerance category's image centred on centre, or on the display if there's none.
+    void addToleranceLabel (int category, std::optional<juce::Point<float>> centre);
 
     // The bar the playhead is in, clamped to the first/last bar outside the bars' range;
     // nullopt only when there are no bars.
@@ -118,6 +126,8 @@ private:
     int firstBarNumber = 0;
     long long timeMs = 0;
     double chartTimeMs = 0.0;
+    // Every note before this time has been checked for a miss.
+    long long missesLabelledBeforeMs = std::numeric_limits<long long>::min();
 
     juce::OwnedArray<ToleranceLabel> toleranceLabels;
 };

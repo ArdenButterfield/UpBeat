@@ -346,3 +346,92 @@ TEST_CASE ("Bars already played in the current grid line keep their beat lines",
     auto background = image.getPixelAt (xAtTime (250) + 10, 30);
     CHECK (image.getPixelAt (xAtTime (250), 30) != background);
 }
+
+namespace
+{
+    // A display showing one 1000 ms bar with an unplayed lane-0 note at 500 ms.
+    struct HitLabelDisplay
+    {
+        HitLabelDisplay()
+        {
+            note.inputButton = 0;
+            note.performanceTimings.push_back (UNPLAYED_NOTE);
+            events.insert ({ 500, &note });
+
+            display.setBounds (0, 0, 400, 300);
+            display.setEvents (&events);
+            display.setBars ({ { 0, 1000 } }, 0);
+        }
+
+        void advanceTo (long long timeMs)
+        {
+            display.setPlayheadTimeMs (timeMs);
+            display.advance (0.0);
+        }
+
+        GameState state;
+        ChartEvent note { 500, ChartEvent::NOTE };
+        std::multimap<long long, ChartEvent*> events;
+        NoteLaneDisplay display { &state, 2 };
+        // 'A', mapped to lane 0.
+        juce::KeyPress laneZeroKey { 65 };
+    };
+}
+
+TEST_CASE ("A key press that hits no note isn't labelled", "[ui][lanes][labels]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (100);
+    CHECK (d.display.registerKeyPress (d.laneZeroKey, 100) == nullptr);
+    CHECK (d.display.getNumChildComponents() == 0);
+}
+
+TEST_CASE ("A note never hit is labelled as missed once its hit window closes", "[ui][lanes][labels]")
+{
+    HitLabelDisplay d;
+    auto window = d.state.tolerances.back();
+
+    d.advanceTo (500 + window - 1);
+    CHECK (d.display.getNumChildComponents() == 0);
+
+    d.advanceTo (500 + window + 1);
+    CHECK (d.display.getNumChildComponents() == 1);
+
+    // Only once.
+    d.advanceTo (800);
+    CHECK (d.display.getNumChildComponents() == 1);
+}
+
+TEST_CASE ("A hit note is labelled once, and never as missed", "[ui][lanes][labels]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (490);
+    CHECK (d.display.registerKeyPress (d.laneZeroKey, 490) == &d.note);
+    CHECK (d.display.getNumChildComponents() == 1);
+
+    d.advanceTo (900);
+    CHECK (d.display.getNumChildComponents() == 1);
+}
+
+TEST_CASE ("Misses can be labelled before their hit window closes", "[ui][lanes][labels]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (510);
+    d.display.labelMissedNotesBefore (1000);
+    CHECK (d.display.getNumChildComponents() == 1);
+
+    d.advanceTo (900);
+    CHECK (d.display.getNumChildComponents() == 1);
+}
+
+TEST_CASE ("Restarting the playhead checks the notes for misses again", "[ui][lanes][labels]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (900);
+    CHECK (d.display.getNumChildComponents() == 1);
+
+    d.note.performanceTimings.push_back (UNPLAYED_NOTE);
+    d.advanceTo (-500);
+    d.advanceTo (900);
+    CHECK (d.display.getNumChildComponents() == 2);
+}

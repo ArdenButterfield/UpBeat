@@ -14,21 +14,21 @@ struct GameState
     std::vector<Chart> charts;
     Chart* currentChart;
     GameColours colours;
-    static constexpr int NUM_TOLERANCE_CATEGORIES = 4;
+    static constexpr int NUM_TOLERANCE_CATEGORIES = 3;
 
-    [[nodiscard]] const std::string* getMessage (long long difference) const
+    // The tolerance category a hit this far from its note falls in, or NUM_TOLERANCE_CATEGORIES
+    // for a miss.
+    [[nodiscard]] int getCategory (long long difference) const
     {
         for (int i = 0; i < NUM_TOLERANCE_CATEGORIES; ++i)
         {
-            if (abs(difference) < tolerances[i])
-            {
-                return &toleranceLabels[i];
-            }
+            if (std::abs (difference) < tolerances[(size_t) i])
+                return i;
         }
-        return &toleranceLabels.back();
+        return NUM_TOLERANCE_CATEGORIES;
     }
-    std::array<long long, NUM_TOLERANCE_CATEGORIES> tolerances {30, 60, 90, 140};
-    std::array<std::string, NUM_TOLERANCE_CATEGORIES+1> toleranceLabels {"Perfect", "Great", "Good", "Ok", "Miss"};
+    std::array<long long, NUM_TOLERANCE_CATEGORIES> tolerances {30, 60, 140};
+    std::array<std::string, NUM_TOLERANCE_CATEGORIES+1> toleranceLabels {"100", "Fresh", "Ok", "Miss"};
 };
 
 static_assert (std::tuple_size_v<decltype (GameColours::histogramBars)> == GameState::NUM_TOLERANCE_CATEGORIES, "Each tolerance category needs its own histogram colour");

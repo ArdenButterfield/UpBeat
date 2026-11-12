@@ -30,12 +30,11 @@ struct GameColours
     juce::Colour histogramAxis = juce::Colours::white; // The perfect-timing line; category edges are drawn fainter
     juce::Colour histogramMedian = juce::Colours::white; // The median's dotted line and its label
     juce::Colour histogramQuartile = juce::Colours::white.withAlpha (0.5f); // The quartiles' dotted lines and labels
-    // One per tolerance category, from Perfect to Ok.
-    std::array<juce::Colour, 4> histogramBars {
-        juce::Colours::limegreen,
-        juce::Colours::deepskyblue,
-        juce::Colours::gold,
-        juce::Colours::orange,
+    // One per tolerance category, from 100 to Ok: the colour of each one's hit image.
+    std::array<juce::Colour, 3> histogramBars {
+        juce::Colour (0xffc6f9df), // hit_100.png: the average of its oval's gradient
+        juce::Colour (0xfff00000), // hit_fresh.png
+        juce::Colour (0xffe6b05a), // hit_ok.png
     };
 
     // LineGraph
@@ -44,8 +43,8 @@ struct GameColours
     std::array<juce::Colour, 8> graphSeriesPalette {
         juce::Colours::red,
         juce::Colours::dodgerblue,
-        juce::Colours::limegreen,
-        juce::Colours::orange,
+        juce::Colour (0xffc6f9df), // hit_100.png: the average of its oval's gradient
+        juce::Colour (0xffe6b05a), // hit_ok.png
         juce::Colours::mediumpurple,
         juce::Colours::cyan,
         juce::Colours::yellow,

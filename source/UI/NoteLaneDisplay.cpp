@@ -13,7 +13,7 @@ namespace
     // Central row of the keyboard: 'a' 's' 'd' 'f' 'g' 'h' 'j' 'k' 'l' ';'.
     constexpr std::array<int, 10> homeRowKeyCodes = { 65, 83, 68, 70, 71, 72, 74, 75, 76, 59 };
 
-    constexpr float noteRadius = 7.f;
+    constexpr float noteRadius = 28.f;
     constexpr int toleranceLabelWidth = 80;  // the hit images are fitted inside this, keeping their shape
     constexpr int toleranceLabelHeight = 44;
     constexpr float hitLineThickness = 8.f;
@@ -49,8 +49,14 @@ namespace
         return !event.performanceTimings.empty() && event.performanceTimings.back() != UNPLAYED_NOTE;
     }
 
-    // How far notes, beat lines and the playhead are kept from a border.
-    constexpr float borderInset = noteRadius + 2.f;
+    // How far notes, beat lines and the playhead are kept from a row's left and right
+    // borders, so notes at the very start or end of a line aren't clipped and keep clear of
+    // the (thickest, current-row) outline.
+    constexpr float borderInsetX = noteRadius + (float) GuiStyle::mediumLine + 2.f;
+    // How far the lanes are kept from a row's top and bottom borders. Notes sit on their
+    // lane's line, which is spread down the row well clear of these, so this doesn't need
+    // to make room for a whole note.
+    constexpr float borderInsetY = 9.f;
 }
 
 NoteLaneDisplay::NoteLaneDisplay (GameState* gs, int numLanes_) : gameState (gs), numLanes (numLanes_)
@@ -320,17 +326,17 @@ float NoteLaneDisplay::xForTime (size_t barIndex, long long time) const
 
 juce::Rectangle<float> NoteLaneDisplay::rowInner (int row) const
 {
-    auto area = rows[(size_t) row].toFloat().reduced (0.f, borderInset);
+    auto area = rows[(size_t) row].toFloat().reduced (0.f, borderInsetY);
     if (row % gridColumns == 0)
-        area.removeFromLeft (borderInset);
+        area.removeFromLeft (borderInsetX);
     if (row % gridColumns == gridColumns - 1)
-        area.removeFromRight (borderInset);
+        area.removeFromRight (borderInsetX);
     return area;
 }
 
 juce::Rectangle<float> NoteLaneDisplay::gridLineInner (int gridLine) const
 {
-    return gridLineBounds[(size_t) gridLine].toFloat().reduced (borderInset);
+    return gridLineBounds[(size_t) gridLine].toFloat().reduced (borderInsetX, borderInsetY);
 }
 
 float NoteLaneDisplay::laneY (juce::Rectangle<float> area, int lane) const

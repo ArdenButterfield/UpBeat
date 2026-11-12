@@ -61,16 +61,17 @@ namespace
     };
 
     // The top grid line spans x 5 to 395 and y 5 to 134, split between its two rows at x 200.
-    // Its inner area spans y 14 to 125, and the top-left row's x 14 to 200 for the bar's 1000 ms.
-    // The bottom grid line is 135 px down.
+    // Its inner area spans y 14 to 125, and x 38 to 362 (kept a note's width from the sides);
+    // the top-left row's x 38 to 200 is the bar's 1000 ms. The bottom grid line is 135 px down.
     constexpr int topRowTop = 5, topRowBottom = 134;
     constexpr int innerTop = 14, innerBottom = 125;
-    // Left of every note the tests place, so only the lines are drawn there.
-    constexpr int emptyColumnX = 25;
+    // Left of every note the tests place (the earliest at 250 ms, reaching back to x 50), so
+    // only the lines are drawn there.
+    constexpr int emptyColumnX = 40;
 
     int xAtTime (long long timeMs)
     {
-        return juce::roundToInt (14.0f + 186.0f * static_cast<float> (timeMs) / 1000.0f);
+        return juce::roundToInt (38.0f + 162.0f * static_cast<float> (timeMs) / 1000.0f);
     }
 
     bool sameRgb (juce::Colour a, juce::Colour b)
@@ -223,8 +224,9 @@ TEST_CASE ("Notes keep their place in the bar on either side of a grid line", "[
     auto image = display.paint();
 
     // A note at the very start of the first bar sits inside the border, not on it. (The
-    // playhead runs through its middle, so it's checked a little to the right.)
-    auto lane0Lines = lineYs (image, emptyColumnX, display.laneColour (0));
+    // playhead runs through its middle, so it's checked a little to the right.) It covers
+    // the usual empty column, so its lane's line is found in the empty second bar instead.
+    auto lane0Lines = lineYs (image, 300, display.laneColour (0));
     REQUIRE (lane0Lines.size() == 1);
     CHECK (noteCentreY (image, xAtTime (0) + 4, display.laneColour (0)) == lane0Lines.front());
     CHECK (image.getPixelAt (5, onLine (lane0Lines.front())) == juce::Colours::white);
@@ -246,7 +248,7 @@ namespace
     // or bottom grid line, on lane 0's line.
     juce::Point<int> noteSpot (int row)
     {
-        return { row % 2 == 0 ? 107 : 293, row / 2 == 0 ? 51 : 186 };
+        return { row % 2 == 0 ? 119 : 281, row / 2 == 0 ? 51 : 186 };
     }
 
     // How opaque the note drawn at a spot is, from 0 (only the lane line shows) to 1. The
@@ -356,15 +358,16 @@ TEST_CASE ("Practice's bar numbering fades in the same way", "[ui][lanes][fade]"
 TEST_CASE ("Bars already played in the current grid line keep their beat lines", "[ui][lanes][fade]")
 {
     SixBarDisplay display;
-    // At 300 ms the beat line falls well inside a pixel column (x = 69.8). A time landing on
-    // a half pixel, like 250 ms (x = 60.5), can round either way under Release's /fp:fast,
+    // At 320 ms the beat line falls well inside a pixel column (x = 89.8). A time landing on
+    // a half pixel, like 250 ms (x = 78.5), can round either way under Release's /fp:fast,
     // so the line could be drawn a column off from the one checked.
-    display.notes.emplace_back (300, ChartEvent::BEAT);
-    display.events.insert ({ 300, &display.notes.back() });
+    display.notes.emplace_back (320, ChartEvent::BEAT);
+    display.events.insert ({ 320, &display.notes.back() });
 
+    // Checked below lane 0's notes and clear of lane 1's line.
     auto image = display.paint (sixBars(), 0, 1200);
-    auto background = image.getPixelAt (xAtTime (300) + 10, 30);
-    CHECK (image.getPixelAt (xAtTime (300), 30) != background);
+    auto background = image.getPixelAt (xAtTime (320) + 10, 110);
+    CHECK (image.getPixelAt (xAtTime (320), 110) != background);
 }
 
 namespace

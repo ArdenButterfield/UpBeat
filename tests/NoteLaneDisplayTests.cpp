@@ -435,3 +435,14 @@ TEST_CASE ("Restarting the playhead checks the notes for misses again", "[ui][la
     d.advanceTo (900);
     CHECK (d.display.getNumChildComponents() == 2);
 }
+
+TEST_CASE ("A miss is labelled where the note was placed, not where the playhead took it", "[ui][lanes][labels]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (700);
+    REQUIRE (d.display.getNumChildComponents() == 1);
+
+    auto centre = d.display.getChildComponent (0)->getBounds().getCentre();
+    CHECK (std::abs (centre.x - xAtTime (500)) <= 1);
+    CHECK (std::abs (centre.x - xAtTime (700)) > 10);
+}

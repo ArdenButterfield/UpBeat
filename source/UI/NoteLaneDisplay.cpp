@@ -83,7 +83,8 @@ void NoteLaneDisplay::labelMissedNotesBefore (long long time)
         auto& [eventTime, event] = *it;
         if (event->type == ChartEvent::NOTE && !event->performanceTimings.empty() && !isPlayed (*event))
         {
-            auto position = notePosition (eventTime, *event);
+            // Where the note was placed in its bar, not where it rode the playhead to.
+            auto position = notePlacedPosition (eventTime, *event);
             addToleranceLabel (GameState::NUM_TOLERANCE_CATEGORIES, position ? position : playheadPosition());
         }
     }
@@ -264,6 +265,16 @@ float NoteLaneDisplay::laneY (juce::Rectangle<float> area, int lane) const
     auto lanes = std::max (1, numLanes);
     auto fraction = static_cast<float> (juce::jlimit (0, lanes - 1, lane) + 1) / static_cast<float> (lanes + 1);
     return std::floor (area.getY() + fraction * area.getHeight()) + 0.5f;
+}
+
+std::optional<juce::Point<float>> NoteLaneDisplay::notePlacedPosition (long long eventTime, const ChartEvent& event) const
+{
+    auto barIndex = barIndexAt (eventTime);
+    if (!barIndex)
+        return std::nullopt;
+
+    auto area = rowInner (rowForBar (*barIndex));
+    return juce::Point<float> (xForTime (*barIndex, eventTime), laneY (area, event.inputButton));
 }
 
 std::optional<juce::Point<float>> NoteLaneDisplay::notePosition (long long eventTime, const ChartEvent& event) const

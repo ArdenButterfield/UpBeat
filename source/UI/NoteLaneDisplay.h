@@ -110,6 +110,9 @@ private:
     juce::Rectangle<float> gridLineInner (int gridLine) const;
     // Where a note is drawn: in its own bar's row, or riding the playhead once it has passed.
     std::optional<juce::Point<float>> notePosition (long long eventTime, const ChartEvent& event) const;
+    // Where a note sits in its own bar's row, even once the playhead has passed it or the
+    // row has been cleared; nullopt if it's outside every bar.
+    std::optional<juce::Point<float>> notePlacedPosition (long long eventTime, const ChartEvent& event) const;
     std::optional<juce::Point<float>> playheadPosition() const;
 
     GameState* gameState;

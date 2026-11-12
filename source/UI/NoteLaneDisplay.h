@@ -84,7 +84,9 @@ public:
 private:
     ChartEvent* findClosestNoteForHit (int lane, long long time);
     // Shows a tolerance category's image centred on centre, or on the display if there's none.
-    void addToleranceLabel (int category, std::optional<juce::Point<float>> centre);
+    ToleranceLabel* addToleranceLabel (int category, std::optional<juce::Point<float>> centre);
+    // The line from where a hit note was placed to where its label is centred.
+    std::vector<juce::Line<float>> hitLineSegments (long long eventTime, juce::Point<float> placed, juce::Point<float> centre) const;
 
     // The bar the playhead is in, clamped to the first/last bar outside the bars' range;
     // nullopt only when there are no bars.

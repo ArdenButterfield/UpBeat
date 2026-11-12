@@ -14,6 +14,7 @@ namespace
     constexpr float noteRadius = 7.f;
     constexpr int toleranceLabelWidth = 80;  // the hit images are fitted inside this, keeping their shape
     constexpr int toleranceLabelHeight = 44;
+    constexpr float hitLineThickness = 6.f;
 
     // Charts set colours in Oklab, with no alpha, so how see-through these are is fixed here.
     constexpr float rowBackgroundAlpha = 0.25f;
@@ -92,12 +93,29 @@ void NoteLaneDisplay::labelMissedNotesBefore (long long time)
     missesLabelledBeforeMs = time;
 }
 
-void NoteLaneDisplay::addToleranceLabel (int category, std::optional<juce::Point<float>> centre)
+std::vector<juce::Line<float>> NoteLaneDisplay::hitLineSegments (long long eventTime, juce::Point<float> placed, juce::Point<float> centre) const
+{
+    // Rows side by side share a line; if the note has ridden the playhead down to the next
+    // grid line, the line runs off the end of the note's row and on from the start of the
+    // playhead's.
+    auto noteBar = barIndexAt (eventTime);
+    auto playheadBar = playheadBarIndex();
+    if (std::abs (placed.y - centre.y) < 0.5f || !noteBar || !playheadBar)
+        return { { placed, centre } };
+
+    auto noteRow = rowInner (rowForBar (*noteBar));
+    auto playheadRow = rowInner (rowForBar (*playheadBar));
+    return { { placed, { noteRow.getRight(), placed.y } },
+        { { playheadRow.getX(), centre.y }, centre } };
+}
+
+ToleranceLabel* NoteLaneDisplay::addToleranceLabel (int category, std::optional<juce::Point<float>> centre)
 {
     auto* label = toleranceLabels.add (new ToleranceLabel (category));
     label->setBounds (juce::Rectangle<int> (toleranceLabelWidth, toleranceLabelHeight)
                           .withCentre (centre.value_or (getLocalBounds().getCentre().toFloat()).toInt()));
     addAndMakeVisible (label);
+    return label;
 }
 
 void NoteLaneDisplay::setChartTimeMs (double newChartTimeMs)
@@ -171,8 +189,13 @@ ChartEvent* NoteLaneDisplay::findClosestNoteForHit (int lane, long long time)
     // were never hit, once their hit window closes (see labelMissedNotesBefore).
     if (closestNote != nullptr)
     {
-        // The label takes the hit note's place on screen (found before the note is marked played).
-        addToleranceLabel (gameState->getCategory (closeness), notePosition (closestEventTime, *closestNote));
+        // The label takes the hit note's place on screen (found before the note is marked
+        // played), over a line back to where it should have been played.
+        auto category = gameState->getCategory (closeness);
+        auto centre = notePosition (closestEventTime, *closestNote);
+        auto* label = addToleranceLabel (category, centre);
+        if (auto placed = notePlacedPosition (closestEventTime, *closestNote); placed && centre)
+            label->setHitLine (hitLineSegments (closestEventTime, *placed, *centre), gameState->colours.histogramBars[(size_t) category]);
         closestNote->performanceTimings.back() = time - closestEventTime;
         if (onNoteTimed)
             onNoteTimed (time - closestEventTime);
@@ -394,6 +417,19 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
         auto row = rows[(size_t) currentRow].toFloat();
         g.setColour (palette[LaneColours::playhead]);
         g.drawLine (xForTime (*currentBar, timeMs), row.getY(), xForTime (*currentBar, timeMs), row.getBottom(), 2.f);
+    }
+
+    // Hit lines beneath their labels (which, as child components, are drawn after this).
+    for (auto* label : toleranceLabels)
+    {
+        g.setColour (label->getHitLineColour().withMultipliedAlpha (label->getAlpha()));
+        for (auto& segment : label->getHitLine())
+        {
+            juce::Path path;
+            path.startNewSubPath (segment.getStart());
+            path.lineTo (segment.getEnd());
+            g.strokePath (path, juce::PathStrokeType (hitLineThickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
     }
 }
 

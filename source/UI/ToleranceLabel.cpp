@@ -31,6 +31,12 @@ juce::Image ToleranceLabel::imageForCategory (int category)
     return juce::ImageCache::getFromMemory (image.data, image.size);
 }
 
+void ToleranceLabel::setHitLine (std::vector<juce::Line<float>> segments, juce::Colour colour)
+{
+    hitLine = std::move (segments);
+    hitLineColour = colour;
+}
+
 bool ToleranceLabel::advance (double elapsedMs)
 {
     ageMs += elapsedMs;

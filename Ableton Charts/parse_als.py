@@ -777,7 +777,7 @@ def main() -> int:
     parser.add_argument("-o", "--output-dir", type=Path, help="where to write the charts (default: next to each .als file)")
     parser.add_argument("--list-tracks", action="store_true", help="only print the tracks and their groups")
     args = parser.parse_args()
-
+    
     for path in args.files:
         if args.list_tracks:
             print_tracks(path)

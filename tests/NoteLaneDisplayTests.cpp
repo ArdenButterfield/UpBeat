@@ -1,5 +1,6 @@
 #include <GameState.h>
 #include <UI/NoteLaneDisplay.h>
+#include <UI/ToleranceLabel.h>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -445,4 +446,32 @@ TEST_CASE ("A miss is labelled where the note was placed, not where the playhead
     auto centre = d.display.getChildComponent (0)->getBounds().getCentre();
     CHECK (std::abs (centre.x - xAtTime (500)) <= 1);
     CHECK (std::abs (centre.x - xAtTime (700)) > 10);
+}
+
+TEST_CASE ("A late hit's label sits over a line back to where the note should have been played", "[ui][lanes][labels]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (560);
+    REQUIRE (d.display.registerKeyPress (d.laneZeroKey, 560) == &d.note);
+    REQUIRE (d.display.getNumChildComponents() == 1);
+
+    auto* label = dynamic_cast<ToleranceLabel*> (d.display.getChildComponent (0));
+    REQUIRE (label != nullptr);
+    REQUIRE (label->getHitLine().size() == 1);
+    auto line = label->getHitLine().front();
+    CHECK (std::abs (line.getStartX() - (float) xAtTime (500)) <= 1.f);
+    CHECK (std::abs (line.getEndX() - (float) xAtTime (560)) <= 1.f);
+    CHECK (line.getStartY() == line.getEndY());
+    CHECK (label->getBounds().toFloat().getCentre().getDistanceFrom (line.getEnd()) <= 1.f);
+    CHECK (label->getHitLineColour() == d.state.colours.histogramBars[(size_t) d.state.getCategory (60)]);
+}
+
+TEST_CASE ("A miss has no hit line", "[ui][lanes][labels]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (700);
+    REQUIRE (d.display.getNumChildComponents() == 1);
+    auto* label = dynamic_cast<ToleranceLabel*> (d.display.getChildComponent (0));
+    REQUIRE (label != nullptr);
+    CHECK (label->getHitLine().empty());
 }

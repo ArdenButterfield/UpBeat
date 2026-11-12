@@ -107,6 +107,9 @@ TEST_CASE ("Chart scenes hide the Start button until their synths have loaded", 
         CHECK_FALSE (startButton->isVisible());
 
         CHECK (runMessageLoopUntil ([&] { return startButton->isVisible(); }));
+
+        // In front of every other child, so the note lanes' opaque background can't hide it.
+        CHECK (scene.getIndexOfChildComponent (startButton) == scene.getNumChildComponents() - 1);
     };
 
     SECTION ("performance")

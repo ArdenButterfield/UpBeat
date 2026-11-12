@@ -5,12 +5,14 @@
 #include "ChartCreationPanel.h"
 
 #include "../BundledResources.h"
+#include "GuiStyle.h"
 
 namespace
 {
     constexpr int rowHeight = 40;
     constexpr int rowSpacing = 6;
     constexpr int margin = 10;
+    constexpr int titleHeight = 40;
 }
 
 ChartCreationPanel::ChartCreationPanel (const GameColours& colours_) : colours (colours_)
@@ -105,21 +107,21 @@ void ChartCreationPanel::paint (juce::Graphics& g)
 {
     g.fillAll (colours.panelBackground);
     g.setColour (colours.text);
-    g.setFont (20);
+    g.setFont (GuiStyle::fontSize (20.0f));
 
-    g.drawText ("Chart Files", getLocalBounds().reduced (margin).withHeight (30), juce::Justification::centred, 1);
+    g.drawText ("Chart Files", getLocalBounds().reduced (margin).withHeight (titleHeight), juce::Justification::centred, 1);
 }
 
 void ChartCreationPanel::resized()
 {
     auto bounds = getLocalBounds().reduced (margin);
     auto bottomButtons = bounds.removeFromBottom (rowHeight);
-    cancelButton.setBounds (bottomButtons.removeFromRight (120));
+    cancelButton.setBounds (bottomButtons.removeFromRight (150));
     bottomButtons.removeFromRight (rowSpacing);
     errorLabel.setBounds (bottomButtons);
 
     bounds.removeFromBottom (rowSpacing);
-    bounds.removeFromTop (30);
+    bounds.removeFromTop (titleHeight);
 
     uploadButton.setBounds (bounds.removeFromBottom (rowHeight));
     bounds.removeFromBottom (rowSpacing);

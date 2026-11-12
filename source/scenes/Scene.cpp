@@ -3,6 +3,7 @@
 //
 
 #include "Scene.h"
+#include "../UI/GuiStyle.h"
 Scene::Scene(GameState* gs) : gameState (gs)
 {
     setFramesPerSecond (60);
@@ -37,6 +38,6 @@ SceneIDs::SceneID Scene::getDesiredSceneID()
 }void Scene::paintLoadingMessage (juce::Graphics& g) const
 {
     g.setColour (gameState->colours.text);
-    g.setFont (24.0f);
+    g.setFont (GuiStyle::fontSize (24.0f));
     g.drawText ("Loading...", getLocalBounds(), juce::Justification::centred);
 }

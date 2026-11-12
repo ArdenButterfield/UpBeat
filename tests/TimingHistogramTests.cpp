@@ -240,12 +240,13 @@ TEST_CASE ("TimingHistogram draws dotted lines at the median and quartiles", "[h
             lit += image.getPixelAt (x, y).getBrightness() > 0.3f ? 1 : 0;
         return lit;
     };
-    auto medianRow = (int) plot.getY() - 18;
-    auto quartileRow = (int) plot.getY() - 6;
-    CHECK (litInRow (medianRow, column (-40.0) - 60, column (-40.0) - 1) > 0);
-    CHECK (litInRow (medianRow, column (-40.0) + 2, (int) plot.getRight()) == 0);
-    CHECK (litInRow (quartileRow, column (35.0) - 60, column (35.0) - 1) > 0);
-    CHECK (litInRow (quartileRow, column (35.0) + 2, (int) plot.getRight()) == 0);
+    // The middle of each of the two 16 px rows of labels.
+    auto medianRow = (int) plot.getY() - 24;
+    auto quartileRow = (int) plot.getY() - 8;
+    CHECK (litInRow (medianRow, column (-40.0) - 80, column (-40.0) - 2) > 0);
+    CHECK (litInRow (medianRow, column (-40.0) + 3, (int) plot.getRight()) == 0);
+    CHECK (litInRow (quartileRow, column (35.0) - 80, column (35.0) - 2) > 0);
+    CHECK (litInRow (quartileRow, column (35.0) + 3, (int) plot.getRight()) == 0);
 }
 
 TEST_CASE ("TimingHistogram's bars grow with their counts, early at the left", "[histogram]")

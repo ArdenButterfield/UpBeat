@@ -3,6 +3,7 @@
 //
 
 #include "BarProgressDisplay.h"
+#include "GuiStyle.h"
 
 #include <algorithm>
 
@@ -72,7 +73,7 @@ void BarProgressDisplay::paint (juce::Graphics& g)
         }
         g.fillRect (square);
         g.setColour (colours.barOutline);
-        g.drawRect (square, i == currentBar ? 3 : 1);
+        g.drawRect (square, i == currentBar ? GuiStyle::thickLine : GuiStyle::thinLine);
 
         // If the history is longer than fits, show only the most recent reps.
         auto& history = successHistories[(size_t) i];

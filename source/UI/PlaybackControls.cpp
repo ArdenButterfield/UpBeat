@@ -3,6 +3,7 @@
 //
 
 #include "PlaybackControls.h"
+#include "GuiStyle.h"
 
 PlaybackControls::PlaybackControls (double initialTempoScale)
 {
@@ -22,7 +23,7 @@ PlaybackControls::PlaybackControls (double initialTempoScale)
 void PlaybackControls::configureSlider (juce::Slider& slider, juce::Label& label, const juce::String& labelText)
 {
     slider.setSliderStyle (juce::Slider::LinearVertical);
-    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, true, 60, 20);
+    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, true, 72, 28);
     slider.setWantsKeyboardFocus (false);
     slider.setMouseClickGrabsKeyboardFocus (false);
 
@@ -37,6 +38,6 @@ void PlaybackControls::configureSlider (juce::Slider& slider, juce::Label& label
 void PlaybackControls::resized()
 {
     auto bounds = getLocalBounds();
-    tempoScaleLabel.setBounds (bounds.removeFromTop (20));
+    tempoScaleLabel.setBounds (bounds.removeFromTop (28));
     tempoScaleSlider.setBounds (bounds);
 }

@@ -4,6 +4,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processorRef (p)
 {
     juce::ignoreUnused (processorRef);
+    setLookAndFeel (&lookAndFeel);
 
     addAndMakeVisible (inspectButton);
 
@@ -28,6 +29,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 PluginEditor::~PluginEditor()
 {
     removeChildComponent (&processorRef.sceneLoader);
+    setLookAndFeel (nullptr);
 }
 
 void PluginEditor::paint (juce::Graphics& g)

@@ -9,8 +9,6 @@
 
 ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startButton("Start"), playbackControls (gs->currentChart->tempoScale), synthLoader (*gs->currentChart), countIn (BarAtom::splitIntoBars (*gs->currentChart).front()), noteLaneDisplay (gs, gs->currentChart->numLanes), timingHistogram (*gs), playing(false), desiredSceneId(SceneIDs::CHART_PERFORMANCE_SCENE)
 {
-    // Hidden, with "Loading..." in its place, until the synths have loaded.
-    addChildComponent (startButton);
     startButton.addListener (this);
     synthLoader.onLoaded = [this]
     {
@@ -29,7 +27,12 @@ ChartPerformanceScene::ChartPerformanceScene(GameState* gs) : Scene(gs), startBu
     addAndMakeVisible (noteLaneDisplay);
 
     noteLaneDisplay.onNoteTimed = [this] (long long errorMs) { timingHistogram.addTiming (errorMs); };
+    noteLaneDisplay.setBackgroundTile (NoteLaneDisplay::defaultBackgroundTile());
     addAndMakeVisible (timingHistogram);
+
+    // Hidden, with "Loading..." in its place, until the synths have loaded. Added last, so
+    // it sits over the note lanes, whose background is opaque.
+    addChildComponent (startButton);
 
     setWantsKeyboardFocus (true);
     audioChartTimeMs = static_cast<double> (-countIn.lengthMs);
@@ -193,8 +196,8 @@ void ChartPerformanceScene::resized()
 {
     grabKeyboardFocus();
     startButton.setBounds (getLocalBounds().withSizeKeepingCentre (200, 40));
-    constexpr int controlsWidth = 70;
-    constexpr int histogramHeight = 110;
+    constexpr int controlsWidth = 80;
+    constexpr int histogramHeight = 140;
     auto bounds = getLocalBounds().reduced (10, 20);
     playbackControls.setBounds (bounds.removeFromLeft (controlsWidth));
     bounds.removeFromLeft (10);

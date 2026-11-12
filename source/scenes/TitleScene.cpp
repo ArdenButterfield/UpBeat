@@ -3,6 +3,7 @@
 //
 
 #include "TitleScene.h"
+#include "../UI/GuiStyle.h"
 TitleScene::TitleScene(GameState* gs) : Scene(gs)
 {
     sceneID = SceneIDs::TITLE_SCENE;
@@ -15,7 +16,7 @@ void TitleScene::paint (juce::Graphics& g)
     g.setColour (gameState->colours.titleBackground);
     g.fillAll();
     g.setColour (gameState->colours.text);
-    g.setFont (24);
+    g.setFont (GuiStyle::fontSize (24.0f));
     g.drawText ("UpBeat", getLocalBounds(), juce::Justification::centred, 1);
 }
 

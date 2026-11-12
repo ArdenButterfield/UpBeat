@@ -3,6 +3,8 @@
 //
 
 #include "NoteLaneDisplay.h"
+#include "BinaryData.h"
+#include "GuiStyle.h"
 
 #include <cstdlib>
 
@@ -14,10 +16,18 @@ namespace
     constexpr float noteRadius = 7.f;
     constexpr int toleranceLabelWidth = 80;  // the hit images are fitted inside this, keeping their shape
     constexpr int toleranceLabelHeight = 44;
-    constexpr float hitLineThickness = 6.f;
+    constexpr float hitLineThickness = 8.f;
+    // A key press's ripple grows from nothing to twice the hit images' width over its life,
+    // fading out from this opacity as it does.
+    constexpr double rippleDurationMs = 1000.0;
+    constexpr float rippleMaxDiameter = 2.f * (float) toleranceLabelWidth;
+    constexpr float rippleStartAlpha = 0.5f;
 
     // Charts set colours in Oklab, with no alpha, so how see-through these are is fixed here.
     constexpr float rowBackgroundAlpha = 0.25f;
+    // The background tile image is drawn at this fraction of its pixel size, so it stays
+    // sharp on high-density screens.
+    constexpr float backgroundTileScale = 0.5f;
     constexpr float barlineAlpha = 0.3f;
     constexpr float beatLineAlpha = 0.15f;
     constexpr float laneLineAlpha = 0.5f;
@@ -45,13 +55,25 @@ namespace
 
 NoteLaneDisplay::NoteLaneDisplay (GameState* gs, int numLanes_) : gameState (gs), numLanes (numLanes_)
 {
-    // All input is via the owning scene's keyPresses, never the mouse - and this display
-    // sits on top of scene controls (like the start button) that do need clicks to land.
+    // All input is via the owning scene's keyPresses, never the mouse, so clicks pass
+    // through to any scene controls it overlaps. (Its background is opaque, so controls
+    // that must be seen, like the start button, are kept in front of it.)
     setInterceptsMouseClicks (false, false);
 
     buttonIndicators.resize ((size_t) numLanes);
     indicatorLighting.assign ((size_t) numLanes, 0.f);
     keys = keysForLanes (numLanes);
+}
+
+juce::Image NoteLaneDisplay::defaultBackgroundTile()
+{
+    return juce::ImageCache::getFromMemory (BinaryData::lane_background_png, BinaryData::lane_background_pngSize);
+}
+
+void NoteLaneDisplay::setBackgroundTile (juce::Image newTile)
+{
+    backgroundTile = std::move (newTile);
+    repaint();
 }
 
 void NoteLaneDisplay::setEvents (const std::multimap<long long, ChartEvent*>* newEvents)
@@ -130,6 +152,10 @@ void NoteLaneDisplay::advance (double elapsedMs)
 
     labelMissedNotesBefore (timeMs - gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES - 1]);
 
+    for (auto& ripple : ripples)
+        ripple.ageMs += elapsedMs;
+    ripples.erase (std::remove_if (ripples.begin(), ripples.end(), [] (const Ripple& r) { return r.ageMs >= rippleDurationMs; }), ripples.end());
+
     for (int i = toleranceLabels.size() - 1; i >= 0; --i)
     {
         if (toleranceLabels[i]->advance (elapsedMs))
@@ -152,10 +178,34 @@ ChartEvent* NoteLaneDisplay::registerKeyPress (const juce::KeyPress& key, long l
         if (std::find (keys[i].begin(), keys[i].end(), key.getKeyCode()) != keys[i].end())
         {
             indicatorLighting[i] = 1;
+            if (auto spot = keyPressPosition ((int) i, hitTimeMs))
+                ripples.push_back ({ *spot, (int) i, 0.0 });
             return findClosestNoteForHit ((int) i, hitTimeMs);
         }
     }
     return nullptr;
+}
+
+std::optional<juce::Point<float>> NoteLaneDisplay::keyPressPosition (int lane, long long time) const
+{
+    auto barIndex = barIndexAt (time);
+    if (!barIndex)
+        barIndex = playheadBarIndex();
+    if (!barIndex)
+        return std::nullopt;
+
+    auto area = rowInner (rowForBar (*barIndex));
+    return juce::Point<float> (xForTime (*barIndex, time), laneY (area, lane));
+}
+
+float NoteLaneDisplay::Ripple::diameter() const
+{
+    return rippleMaxDiameter * static_cast<float> (juce::jlimit (0.0, 1.0, ageMs / rippleDurationMs));
+}
+
+float NoteLaneDisplay::Ripple::alpha() const
+{
+    return rippleStartAlpha * (1.f - static_cast<float> (juce::jlimit (0.0, 1.0, ageMs / rippleDurationMs)));
 }
 
 ChartEvent* NoteLaneDisplay::findClosestNoteForHit (int lane, long long time)
@@ -287,7 +337,7 @@ float NoteLaneDisplay::laneY (juce::Rectangle<float> area, int lane) const
 {
     auto lanes = std::max (1, numLanes);
     auto fraction = static_cast<float> (juce::jlimit (0, lanes - 1, lane) + 1) / static_cast<float> (lanes + 1);
-    return std::floor (area.getY() + fraction * area.getHeight()) + 0.5f;
+    return std::round (area.getY() + fraction * area.getHeight());
 }
 
 std::optional<juce::Point<float>> NoteLaneDisplay::notePlacedPosition (long long eventTime, const ChartEvent& event) const
@@ -341,16 +391,23 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
     for (int i = 0; i < gridLines; ++i)
     {
         auto isCurrent = currentRow >= 0 && currentRow / gridColumns == i;
+        if (backgroundTile.isValid())
+        {
+            // Tiled from the display's corner, so the pattern runs on unbroken from one grid
+            // line to the next.
+            g.setFillType (juce::FillType (backgroundTile, juce::AffineTransform::scale (backgroundTileScale)));
+            g.fillRect (gridLineBounds[(size_t) i]);
+        }
         g.setColour (palette[LaneColours::rowBackground].withAlpha (rowBackgroundAlpha));
         g.fillRect (gridLineBounds[(size_t) i]);
         g.setColour (palette[isCurrent ? LaneColours::rowActiveOutline : LaneColours::rowOutline]);
-        g.drawRect (gridLineBounds[(size_t) i], isCurrent ? 2 : 1);
+        g.drawRect (gridLineBounds[(size_t) i], isCurrent ? GuiStyle::mediumLine : GuiStyle::thinLine);
 
         auto area = gridLineInner (i);
         for (int lane = 0; lane < numLanes; ++lane)
         {
             g.setColour (laneColour (lane).withAlpha (laneLineAlpha));
-            g.drawHorizontalLine (static_cast<int> (laneY (area, lane)), area.getX(), area.getRight());
+            GuiStyle::fillHorizontalLine (g, laneY (area, lane), area.getX(), area.getRight(), GuiStyle::thinLine);
         }
     }
 
@@ -360,7 +417,7 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
         g.setColour (colour.withAlpha (indicatorLighting[i]));
         g.fillRect (buttonIndicators[i]);
         g.setColour (colour);
-        g.drawRect (buttonIndicators[i]);
+        g.drawRect (buttonIndicators[i], GuiStyle::thinLine);
     }
 
     if (events == nullptr || !currentBar)
@@ -397,7 +454,7 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
             if (event->type == ChartEvent::BEAT || event->type == ChartEvent::BARLINE)
             {
                 g.setColour (event->type == ChartEvent::BARLINE ? palette[LaneColours::barline].withAlpha (barlineAlpha * opacity) : palette[LaneColours::beatLine].withAlpha (beatLineAlpha * opacity));
-                g.drawVerticalLine (juce::roundToInt (xForTime (barIndex, eventTime)), area.getY(), area.getBottom());
+                GuiStyle::fillVerticalLine (g, (float) juce::roundToInt (xForTime (barIndex, eventTime)), area.getY(), area.getBottom(), GuiStyle::thinLine);
             }
         }
 
@@ -416,7 +473,14 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
     {
         auto row = rows[(size_t) currentRow].toFloat();
         g.setColour (palette[LaneColours::playhead]);
-        g.drawLine (xForTime (*currentBar, timeMs), row.getY(), xForTime (*currentBar, timeMs), row.getBottom(), 2.f);
+        g.drawLine (xForTime (*currentBar, timeMs), row.getY(), xForTime (*currentBar, timeMs), row.getBottom(), (float) GuiStyle::mediumLine);
+    }
+
+    // Key press ripples, over the notes but beneath the hit lines and labels.
+    for (auto& ripple : ripples)
+    {
+        g.setColour (laneColour (ripple.lane).withMultipliedAlpha (ripple.alpha()));
+        g.fillEllipse (juce::Rectangle<float> (ripple.diameter(), ripple.diameter()).withCentre (ripple.centre));
     }
 
     // Hit lines beneath their labels (which, as child components, are drawn after this).

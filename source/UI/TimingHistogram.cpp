@@ -1,15 +1,17 @@
 #include "TimingHistogram.h"
+#include "GuiStyle.h"
 
 namespace
 {
-    constexpr int statsWidth = 90;
-    constexpr int labelHeight = 14; // The "Early" and "Late" labels under the plot
+    constexpr int statsWidth = 120;
+    constexpr int labelHeight = 18; // The "Early" and "Late" labels under the plot
     constexpr float sideMargin = 4.f;
     // Two rows of marker labels above the plot: the median's on top, the quartiles' below,
     // so the median's label doesn't collide with the quartiles' either side of it.
-    constexpr int markerLabelHeight = 12;
+    constexpr int markerLabelHeight = 16;
     constexpr int numMarkerLabelRows = 2;
-    constexpr float markerLabelWidth = 60.f;
+    constexpr float markerLabelWidth = 80.f;
+    constexpr int statsLineHeight = 26;
 
     // The smoothing curve spreads each bin's count over a bell curve this wide (its standard
     // deviation), and is sampled this often across the plot.
@@ -131,8 +133,8 @@ void TimingHistogram::drawMarker (juce::Graphics& g, double errorMs, juce::Colou
     const float dashes[] = { 2.f, 2.f };
 
     g.setColour (colour);
-    g.drawDashedLine ({ x, labelBottom, x, plot.getBottom() }, dashes, 2);
-    g.setFont (10.0f);
+    g.drawDashedLine ({ x, labelBottom, x, plot.getBottom() }, dashes, 2, (float) GuiStyle::thinLine);
+    g.setFont (GuiStyle::fontSize (10.0f));
     g.drawText (formatMs (juce::roundToInt (errorMs)),
         juce::Rectangle<float> (x - markerLabelWidth, labelBottom - (float) markerLabelHeight, markerLabelWidth - 2.f, (float) markerLabelHeight),
         juce::Justification::centredRight);
@@ -226,7 +228,7 @@ void TimingHistogram::drawCurve (juce::Graphics& g, bool fill) const
         else
         {
             g.setColour (colour);
-            g.strokePath (path, juce::PathStrokeType (2.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.strokePath (path, juce::PathStrokeType ((float) GuiStyle::mediumLine, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
     }
 }
@@ -237,16 +239,16 @@ void TimingHistogram::paint (juce::Graphics& g)
     g.fillAll (colours.histogramBackground);
 
     auto bounds = getLocalBounds();
-    auto stats = bounds.removeFromLeft (statsWidth).withSizeKeepingCentre (statsWidth, 40);
+    auto stats = bounds.removeFromLeft (statsWidth).withSizeKeepingCentre (statsWidth, 2 * statsLineHeight);
     g.setColour (colours.text);
-    g.setFont (14.0f);
-    g.drawText (juce::String (count) + (count == 1 ? " hit" : " hits"), stats.removeFromTop (20), juce::Justification::centred);
+    g.setFont (GuiStyle::fontSize (14.0f));
+    g.drawText (juce::String (count) + (count == 1 ? " hit" : " hits"), stats.removeFromTop (statsLineHeight), juce::Justification::centred);
     auto mean = juce::roundToInt (getMeanErrorMs());
     g.drawText (count == 0 ? juce::String ("mean -") : "mean " + formatMs (mean), stats, juce::Justification::centred);
 
     auto plot = getPlotArea();
 
-    g.setFont (12.0f);
+    g.setFont (GuiStyle::fontSize (12.0f));
     auto labels = juce::Rectangle<float> (plot.getX(), plot.getBottom(), plot.getWidth(), (float) labelHeight);
     g.drawText ("Early", labels, juce::Justification::centredLeft);
     g.drawText ("Late", labels, juce::Justification::centredRight);
@@ -255,7 +257,7 @@ void TimingHistogram::paint (juce::Graphics& g)
     g.setColour (colours.histogramAxis.withAlpha (0.2f));
     for (int i = 0; i < GameState::NUM_TOLERANCE_CATEGORIES - 1; ++i)
         for (auto sign : { -1.0, 1.0 })
-            g.drawVerticalLine (juce::roundToInt (xForError (sign * (double) gameState.tolerances[(size_t) i])), plot.getY(), plot.getBottom());
+            GuiStyle::fillVerticalLine (g, (float) juce::roundToInt (xForError (sign * (double) gameState.tolerances[(size_t) i])), plot.getY(), plot.getBottom(), GuiStyle::thinLine);
 
     // The curve's fill sits behind the bars, and its line over them.
     drawCurve (g, true);
@@ -273,7 +275,7 @@ void TimingHistogram::paint (juce::Graphics& g)
     drawCurve (g, false);
 
     g.setColour (colours.histogramAxis);
-    g.drawVerticalLine (juce::roundToInt (xForError (0.0)), plot.getY(), plot.getBottom());
+    GuiStyle::fillVerticalLine (g, (float) juce::roundToInt (xForError (0.0)), plot.getY(), plot.getBottom(), GuiStyle::thinLine);
 
     if (count > 0)
     {

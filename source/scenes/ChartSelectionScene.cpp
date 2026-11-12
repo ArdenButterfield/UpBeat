@@ -3,6 +3,7 @@
 //
 
 #include "ChartSelectionScene.h"
+#include "../UI/GuiStyle.h"
 
 ChartSelectionScene::ChartSelectionScene(GameState* gs) : Scene(gs), desiredSceneId (SceneIDs::CHART_SELECT_SCENE)
 {
@@ -88,8 +89,8 @@ void ChartSelectionScene::paint (juce::Graphics& g)
 {
     g.fillAll (gameState->colours.menuBackground);
     g.setColour (gameState->colours.text);
-    g.setFont (24);
-    g.drawText ("Your Charts", getLocalBounds().withHeight (40), juce::Justification::centred, 1);
+    g.setFont (GuiStyle::fontSize (24.0f));
+    g.drawText ("Your Charts", getLocalBounds().withHeight (48), juce::Justification::centred, 1);
 }
 
 void ChartSelectionScene::buttonClicked (juce::Button* b)
@@ -122,10 +123,10 @@ void ChartSelectionScene::buttonClicked (juce::Button* b)
 }
 void ChartSelectionScene::resized()
 {
-    constexpr int titleHeight = 40;
+    constexpr int titleHeight = 48;
     constexpr int rowHeight = 70;
     constexpr int rowSpacing = 20;
-    constexpr int buttonWidth = 110;
+    constexpr int buttonWidth = 140;
     constexpr int buttonSpacing = 10;
 
     auto bounds = getLocalBounds().withTrimmedLeft (10).withTrimmedRight (10).withTrimmedTop (titleHeight);

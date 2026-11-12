@@ -3,6 +3,7 @@
 #include "BinaryData.h"
 #include "PluginProcessor.h"
 #include "SceneLoader.h"
+#include "UI/GuiStyle.h"
 #include "melatonin_inspector/melatonin_inspector.h"
 
 //==============================================================================
@@ -20,6 +21,8 @@ private:
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
     PluginProcessor& processorRef;
+    // Declared before every component, so it outlives them.
+    GuiStyle::LookAndFeel lookAndFeel;
     std::unique_ptr<melatonin::Inspector> inspector;
     juce::TextButton inspectButton { "Inspect the UI" };
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)

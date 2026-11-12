@@ -3,6 +3,12 @@
 //
 
 #include "FeedbackScene.h"
+#include "../UI/GuiStyle.h"
+
+namespace
+{
+    constexpr int titleHeight = 48;
+}
 
 FeedbackScene::FeedbackScene (GameState* gs) : Scene (gs), desiredSceneId (SceneIDs::CHART_FEEDBACK_SCENE), performanceGraph (gs->colours), timingHistogram (*gs), retryButton ("Retry")
 {
@@ -56,24 +62,24 @@ void FeedbackScene::paint (juce::Graphics& g)
 {
     g.fillAll (gameState->colours.menuBackground);
     g.setColour (gameState->colours.text);
-    g.setFont (24);
+    g.setFont (GuiStyle::fontSize (24.0f));
 
-    auto titleSection = getLocalBounds().withHeight (40);
+    auto titleSection = getLocalBounds().withHeight (titleHeight);
     g.drawText ("Feedback", titleSection, juce::Justification::centred, 1);
 }
 
 void FeedbackScene::resized()
 {
-    constexpr int retryButtonHeight = 40;
-    constexpr int histogramHeight = 110;
+    constexpr int retryButtonHeight = 52;
+    constexpr int histogramHeight = 140;
 
-    auto titleSection = getLocalBounds().withHeight (40);
+    auto titleSection = getLocalBounds().withHeight (titleHeight);
     auto bodySection = getLocalBounds().withTrimmedTop (titleSection.getHeight());
     auto retryButtonSection = bodySection.removeFromBottom (retryButtonHeight);
 
     timingHistogram.setBounds (bodySection.removeFromBottom (histogramHeight));
     performanceGraph.setBounds (bodySection);
-    retryButton.setBounds (retryButtonSection.withSizeKeepingCentre (150, 30));
+    retryButton.setBounds (retryButtonSection.withSizeKeepingCentre (150, 40));
 }
 
 void FeedbackScene::buttonClicked (juce::Button* b)

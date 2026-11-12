@@ -3,14 +3,18 @@
 //
 
 #include "LineGraph.h"
+#include "GuiStyle.h"
 
 namespace
 {
     constexpr float pointRadius = 3.5f;
-    constexpr float leftMargin = 55.0f;
-    constexpr float bottomMargin = 30.0f;
-    constexpr float topMargin = 15.0f;
-    constexpr float rightMargin = 15.0f;
+    constexpr float leftMargin = 72.0f;
+    constexpr float bottomMargin = 38.0f;
+    constexpr float topMargin = 18.0f;
+    constexpr float rightMargin = 18.0f;
+    constexpr float tickLength = 6.0f;
+    constexpr float tickLabelWidth = 64.0f;
+    constexpr float tickLabelHeight = 22.0f;
     constexpr int desiredTickCount = 6;
 
     // Rounds a range to a "nice" value (1, 2, 5, or 10 times a power of ten).
@@ -99,7 +103,7 @@ void LineGraph::paint (juce::Graphics& g)
     auto plotArea = getLocalBounds().toFloat().withTrimmedLeft (leftMargin).withTrimmedBottom (bottomMargin).withTrimmedTop (topMargin).withTrimmedRight (rightMargin);
 
     g.setColour (colours.graphForeground);
-    g.drawRect (plotArea, 1.0f);
+    g.drawRect (plotArea, (float) GuiStyle::thinLine);
 
     if (series.empty())
         return;
@@ -140,21 +144,21 @@ void LineGraph::paint (juce::Graphics& g)
         return plotArea.getBottom() - (y - axisMinY) / (axisMaxY - axisMinY) * plotArea.getHeight();
     };
 
-    g.setFont (12.0f);
+    g.setFont (GuiStyle::fontSize (12.0f));
     g.setColour (colours.graphForeground);
 
     for (auto x : xTicks)
     {
         auto sx = toScreenX (x);
-        g.drawLine (sx, plotArea.getBottom(), sx, plotArea.getBottom() + 4.0f, 1.0f);
-        g.drawText (formatTickLabel (x), juce::Rectangle<float> (sx - 25.0f, plotArea.getBottom() + 5.0f, 50.0f, 16.0f), juce::Justification::centred, false);
+        g.drawLine (sx, plotArea.getBottom(), sx, plotArea.getBottom() + tickLength, (float) GuiStyle::thinLine);
+        g.drawText (formatTickLabel (x), juce::Rectangle<float> (sx - tickLabelWidth / 2.0f, plotArea.getBottom() + tickLength + 1.0f, tickLabelWidth, tickLabelHeight), juce::Justification::centred, false);
     }
 
     for (auto y : yTicks)
     {
         auto sy = toScreenY (y);
-        g.drawLine (plotArea.getX() - 4.0f, sy, plotArea.getX(), sy, 1.0f);
-        g.drawText (formatTickLabel (y), juce::Rectangle<float> (0.0f, sy - 8.0f, plotArea.getX() - 6.0f, 16.0f), juce::Justification::centredRight, false);
+        g.drawLine (plotArea.getX() - tickLength, sy, plotArea.getX(), sy, (float) GuiStyle::thinLine);
+        g.drawText (formatTickLabel (y), juce::Rectangle<float> (0.0f, sy - tickLabelHeight / 2.0f, plotArea.getX() - tickLength - 2.0f, tickLabelHeight), juce::Justification::centredRight, false);
     }
 
     for (auto& s : series)
@@ -175,7 +179,7 @@ void LineGraph::paint (juce::Graphics& g)
             else
                 path.lineTo (px, py);
         }
-        g.strokePath (path, juce::PathStrokeType (2.0f));
+        g.strokePath (path, juce::PathStrokeType ((float) GuiStyle::mediumLine));
 
         for (size_t i = 0; i < pointCount; ++i)
         {

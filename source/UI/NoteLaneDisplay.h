@@ -46,6 +46,11 @@ public:
 
     NoteLaneDisplay (GameState* gameState, int numLanes);
 
+    // The image tiled behind the rows, under their background colour; none by default.
+    void setBackgroundTile (juce::Image newTile);
+    // The game's own lane background tile, from BinaryData.
+    static juce::Image defaultBackgroundTile();
+
     void setEvents (const std::multimap<long long, ChartEvent*>* newEvents);
 
     // newBars must be consecutive and in time order. firstBarNumber counts how many bars
@@ -60,7 +65,7 @@ public:
     // separate from the playhead because the event map may use another timeline (see above).
     void setChartTimeMs (double newChartTimeMs);
 
-    // Decays key-hit lighting, ages/removes tolerance labels, and labels notes whose hit
+    // Decays key-hit lighting, ages/removes key press ripples and tolerance labels, and labels notes whose hit
     // window has closed without them being hit as missed. Call once per frame.
     void advance (double elapsedMs);
 
@@ -83,6 +88,9 @@ public:
 
 private:
     ChartEvent* findClosestNoteForHit (int lane, long long time);
+    // Where a key press in a lane at a time is drawn: on the lane's line, where the playhead
+    // was at that time (or in the playhead's bar, if the time is outside every bar).
+    std::optional<juce::Point<float>> keyPressPosition (int lane, long long time) const;
     // Shows a tolerance category's image centred on centre, or on the display if there's none.
     ToleranceLabel* addToleranceLabel (int category, std::optional<juce::Point<float>> centre);
     // The line from where a hit note was placed to where its label is centred.
@@ -101,8 +109,9 @@ private:
     float barOpacity (size_t barIndex) const;
     float xForTime (size_t barIndex, long long time) const;
     // The y of a lane's line within a row's inner area: lanes are spread evenly down the
-    // row, lane 0 at the top. Always the centre of a pixel row, so the line drawn along that
-    // row stays crisp and the notes on it are centred on it.
+    // row, lane 0 at the top. Always on a boundary between pixel rows, so the lane line
+    // (GuiStyle::thinLine, an even number of pixels) drawn centred on it stays crisp, and
+    // the notes on it are centred on it.
     float laneY (juce::Rectangle<float> area, int lane) const;
     // The part of a row notes, beat lines and the playhead are placed within. It's inset from
     // the border so notes at the very start or end of a line aren't clipped, but not where
@@ -135,6 +144,24 @@ private:
     long long missesLabelledBeforeMs = std::numeric_limits<long long>::min();
 
     juce::OwnedArray<ToleranceLabel> toleranceLabels;
+
+public:
+    // A circle spreading out from where a key was pressed, in its lane's colour, which grows
+    // and fades over a second.
+    struct Ripple
+    {
+        juce::Point<float> centre;
+        int lane;
+        double ageMs;
+
+        float diameter() const;
+        float alpha() const;
+    };
+    const std::vector<Ripple>& getRipples() const { return ripples; }
+
+private:
+    std::vector<Ripple> ripples;
+    juce::Image backgroundTile;
 };
 
 #endif //UPBEAT_NOTELANEDISPLAY_H

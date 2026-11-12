@@ -87,15 +87,29 @@ namespace
         return std::abs (pixel.getAlpha() - expected.getAlpha()) <= 3 && sameRgb (pixel, expected);
     }
 
-    // The ys in the top row where the column at x shows a line of this colour.
-    std::vector<int> lineYs (const juce::Image& image, int x, juce::Colour colour)
+    // The middle of each line of this colour crossing the column at x in the top row, as
+    // (first + last) / 2 of the pixel rows it covers. Lines are several pixels thick, so a
+    // line drawn centred between two pixel rows is found half a pixel above the lower one.
+    std::vector<float> lineYs (const juce::Image& image, int x, juce::Colour colour)
     {
-        std::vector<int> ys;
-        for (int y = topRowTop + 2; y < topRowBottom - 2; ++y)
-            if (isLinePixel (image.getPixelAt (x, y), colour))
-                ys.push_back (y);
-        return ys;
+        std::vector<float> middles;
+        int runStart = -1;
+        for (int y = topRowTop + 2; y <= topRowBottom - 2; ++y)
+        {
+            auto onLine = y < topRowBottom - 2 && isLinePixel (image.getPixelAt (x, y), colour);
+            if (onLine && runStart < 0)
+                runStart = y;
+            else if (!onLine && runStart >= 0)
+            {
+                middles.push_back (static_cast<float> (runStart + y - 1) / 2.0f);
+                runStart = -1;
+            }
+        }
+        return middles;
     }
+
+    // A pixel row covered by a line found by lineYs.
+    int onLine (float lineMiddle) { return (int) lineMiddle; }
 
     // The middle of the opaque run of this colour in the column at x, or -1 if there's none.
     float noteCentreY (const juce::Image& image, int x, juce::Colour colour)
@@ -121,17 +135,17 @@ TEST_CASE ("NoteLaneDisplay draws a horizontal line in each row for each lane", 
 
     SECTION ("spaced evenly down the row")
     {
-        auto top = lane0.front() - innerTop, middle = lane1.front() - lane0.front(), bottom = innerBottom - lane1.front();
-        CHECK (std::abs (top - middle) <= 1);
-        CHECK (std::abs (middle - bottom) <= 1);
+        auto top = lane0.front() - (float) innerTop, middle = lane1.front() - lane0.front(), bottom = (float) innerBottom - lane1.front();
+        CHECK (std::abs (top - middle) <= 1.5f);
+        CHECK (std::abs (middle - bottom) <= 1.5f);
     }
 
     SECTION ("in every row, not just the one being played")
     {
         for (auto [dx, dy] : { std::pair { 195, 0 }, { 0, 135 }, { 195, 135 } })
         {
-            CHECK (isLinePixel (image.getPixelAt (emptyColumnX + dx, lane0.front() + dy), display.laneColour (0)));
-            CHECK (isLinePixel (image.getPixelAt (emptyColumnX + dx, lane1.front() + dy), display.laneColour (1)));
+            CHECK (isLinePixel (image.getPixelAt (emptyColumnX + dx, onLine (lane0.front()) + dy), display.laneColour (0)));
+            CHECK (isLinePixel (image.getPixelAt (emptyColumnX + dx, onLine (lane1.front()) + dy), display.laneColour (1)));
         }
     }
 }
@@ -143,7 +157,7 @@ TEST_CASE ("A one-lane chart has a single line across the middle of each row", "
 
     auto lane0 = lineYs (image, emptyColumnX, display.laneColour (0));
     REQUIRE (lane0.size() == 1);
-    CHECK (std::abs (lane0.front() - (innerTop + innerBottom) / 2) <= 1);
+    CHECK (std::abs (lane0.front() - (float) (innerTop + innerBottom) / 2.0f) <= 1.5f);
     CHECK (lineYs (image, emptyColumnX, display.laneColour (1)).empty());
 }
 
@@ -160,8 +174,8 @@ TEST_CASE ("Notes sit on their lane's line whatever their pitch", "[ui][lanes]")
     auto lane1Lines = lineYs (image, emptyColumnX, display.laneColour (1));
     REQUIRE (lane0Lines.size() == 1);
     REQUIRE (lane1Lines.size() == 1);
-    auto lane0Line = (float) lane0Lines.front();
-    auto lane1Line = (float) lane1Lines.front();
+    auto lane0Line = lane0Lines.front();
+    auto lane1Line = lane1Lines.front();
 
     CHECK (noteCentreY (image, xAtTime (250), display.laneColour (0)) == lane0Line);
     CHECK (noteCentreY (image, xAtTime (500), display.laneColour (0)) == lane0Line);
@@ -175,15 +189,17 @@ TEST_CASE ("NoteLaneDisplay lays its four rows out in a 2x2 grid", "[ui][lanes]"
     auto image = display.paint();
     auto lane0Lines = lineYs (image, emptyColumnX, display.laneColour (0));
     REQUIRE (lane0Lines.size() == 1);
-    auto lane0 = lane0Lines.front();
+    auto lane0 = onLine (lane0Lines.front());
 
     // The playing bar's grid line (the top one) has the thicker current-row outline, around
     // both of its bars; the bottom one has the plain outline.
     auto pixel = [&image] (int x, int y) { return image.getPixelAt (x, y); };
-    for (auto x : { 5, 6, 393, 394 })
+    for (auto x : { 5, 6, 7, 392, 393, 394 })
         CHECK (pixel (x, 20) == juce::Colours::white);
-    CHECK (pixel (5, 155) == juce::Colours::grey);
-    CHECK (pixel (394, 155) == juce::Colours::grey);
+    CHECK (pixel (8, 20) != juce::Colours::white);
+    for (auto x : { 5, 6, 393, 394 })
+        CHECK (pixel (x, 155) == juce::Colours::grey);
+    CHECK (pixel (7, 155) != juce::Colours::grey);
 
     // There's no gap or border where the two bars side by side meet, just the row background.
     for (auto x : { 198, 199, 200, 201, 202 })
@@ -210,8 +226,8 @@ TEST_CASE ("Notes keep their place in the bar on either side of a grid line", "[
     // playhead runs through its middle, so it's checked a little to the right.)
     auto lane0Lines = lineYs (image, emptyColumnX, display.laneColour (0));
     REQUIRE (lane0Lines.size() == 1);
-    CHECK (noteCentreY (image, xAtTime (0) + 4, display.laneColour (0)) == (float) lane0Lines.front());
-    CHECK (image.getPixelAt (5, lane0Lines.front()) == juce::Colours::white);
+    CHECK (noteCentreY (image, xAtTime (0) + 4, display.laneColour (0)) == lane0Lines.front());
+    CHECK (image.getPixelAt (5, onLine (lane0Lines.front())) == juce::Colours::white);
 }
 
 namespace
@@ -477,4 +493,81 @@ TEST_CASE ("A miss has no hit line", "[ui][lanes][labels]")
     auto* label = dynamic_cast<ToleranceLabel*> (d.display.getChildComponent (0));
     REQUIRE (label != nullptr);
     CHECK (label->getHitLine().empty());
+}
+
+TEST_CASE ("The background tile is tiled behind the rows, under their background colour", "[ui][lanes][background]")
+{
+    OneBarDisplay setup (2);
+    NoteLaneDisplay display (&setup.state, 2);
+    display.setBounds (0, 0, 400, 300);
+
+    juce::Image tile (juce::Image::ARGB, 8, 8, false, juce::SoftwareImageType());
+    tile.clear (tile.getBounds(), juce::Colours::red);
+    display.setBackgroundTile (tile);
+
+    juce::Image image (juce::Image::ARGB, 400, 300, true, juce::SoftwareImageType());
+    {
+        juce::Graphics g (image);
+        display.paint (g);
+    }
+
+    // Away from the lane lines, in both grid lines: red, darkened by the quarter-opaque black row background.
+    auto expected = juce::Colours::red.overlaidWith (juce::Colours::black.withAlpha (0.25f));
+    for (auto y : { 20, 155 })
+    {
+        INFO ("y = " << y);
+        CHECK (sameRgb (image.getPixelAt (emptyColumnX, y), expected));
+        CHECK (image.getPixelAt (emptyColumnX, y).getAlpha() == 255);
+    }
+    // Not between the grid lines, or around the rows.
+    CHECK (image.getPixelAt (emptyColumnX, 137).getAlpha() == 0);
+}
+
+TEST_CASE ("The game's lane background tile is bundled", "[ui][lanes][background]")
+{
+    auto tile = NoteLaneDisplay::defaultBackgroundTile();
+    REQUIRE (tile.isValid());
+    CHECK (tile.getWidth() == 152);
+    CHECK (tile.getHeight() == 152);
+}
+
+TEST_CASE ("A key press starts a ripple on its lane's line at the playhead", "[ui][lanes][ripples]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (100);
+    d.display.registerKeyPress (d.laneZeroKey, 100);
+
+    REQUIRE (d.display.getRipples().size() == 1);
+    auto& ripple = d.display.getRipples().front();
+    CHECK (ripple.lane == 0);
+    CHECK (std::abs (ripple.centre.x - (float) xAtTime (100)) <= 1.f);
+    CHECK (ripple.diameter() == 0.f);
+    CHECK (ripple.alpha() == 0.5f);
+
+    // Keys that aren't mapped to a lane don't ripple.
+    d.display.registerKeyPress (juce::KeyPress ('q'), 100);
+    CHECK (d.display.getRipples().size() == 1);
+}
+
+TEST_CASE ("A ripple grows to twice the hit images' width while fading out over a second", "[ui][lanes][ripples]")
+{
+    HitLabelDisplay d;
+    d.advanceTo (100);
+    d.display.registerKeyPress (d.laneZeroKey, 100);
+
+    d.display.advance (500.0);
+    REQUIRE (d.display.getRipples().size() == 1);
+    auto& halfway = d.display.getRipples().front();
+    CHECK (halfway.diameter() == 80.f);
+    CHECK (halfway.alpha() == 0.25f);
+    // It stays where the key was pressed as the playhead moves on.
+    d.advanceTo (600);
+    CHECK (std::abs (d.display.getRipples().front().centre.x - (float) xAtTime (100)) <= 1.f);
+
+    d.display.advance (499.0);
+    REQUIRE (d.display.getRipples().size() == 1);
+    CHECK (d.display.getRipples().front().diameter() > 159.f);
+
+    d.display.advance (1.0);
+    CHECK (d.display.getRipples().empty());
 }

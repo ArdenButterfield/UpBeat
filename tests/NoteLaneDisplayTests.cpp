@@ -340,12 +340,15 @@ TEST_CASE ("Practice's bar numbering fades in the same way", "[ui][lanes][fade]"
 TEST_CASE ("Bars already played in the current grid line keep their beat lines", "[ui][lanes][fade]")
 {
     SixBarDisplay display;
-    display.notes.emplace_back (250, ChartEvent::BEAT);
-    display.events.insert ({ 250, &display.notes.back() });
+    // At 300 ms the beat line falls well inside a pixel column (x = 69.8). A time landing on
+    // a half pixel, like 250 ms (x = 60.5), can round either way under Release's /fp:fast,
+    // so the line could be drawn a column off from the one checked.
+    display.notes.emplace_back (300, ChartEvent::BEAT);
+    display.events.insert ({ 300, &display.notes.back() });
 
     auto image = display.paint (sixBars(), 0, 1200);
-    auto background = image.getPixelAt (xAtTime (250) + 10, 30);
-    CHECK (image.getPixelAt (xAtTime (250), 30) != background);
+    auto background = image.getPixelAt (xAtTime (300) + 10, 30);
+    CHECK (image.getPixelAt (xAtTime (300), 30) != background);
 }
 
 namespace

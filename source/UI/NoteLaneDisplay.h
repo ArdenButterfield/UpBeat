@@ -65,7 +65,7 @@ public:
     // separate from the playhead because the event map may use another timeline (see above).
     void setChartTimeMs (double newChartTimeMs);
 
-    // Decays key-hit lighting, ages/removes key press ripples and tolerance labels, and labels notes whose hit
+    // Decays key-hit lighting and lane line flashes, ages/removes key press ripples and tolerance labels, and labels notes whose hit
     // window has closed without them being hit as missed. Call once per frame.
     void advance (double elapsedMs);
 
@@ -133,6 +133,7 @@ private:
     std::array<juce::Rectangle<int>, gridLines> gridLineBounds; // the rows of each grid line together
     std::vector<juce::Rectangle<int>> buttonIndicators;
     std::vector<float> indicatorLighting;
+    std::vector<float> laneFlash; // per lane: 1 right after a key press, tapering to 0 over half a second
     std::vector<std::vector<int>> keys; // key codes accepted by each lane
 
     const std::multimap<long long, ChartEvent*>* events = nullptr;

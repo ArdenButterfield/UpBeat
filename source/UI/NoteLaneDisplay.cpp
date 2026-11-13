@@ -13,7 +13,7 @@ namespace
     // Central row of the keyboard: 'a' 's' 'd' 'f' 'g' 'h' 'j' 'k' 'l' ';'.
     constexpr std::array<int, 10> homeRowKeyCodes = { 65, 83, 68, 70, 71, 72, 74, 75, 76, 59 };
 
-    constexpr float noteRadius = 28.f;
+    constexpr float noteRadius = 14.f;
     constexpr int toleranceLabelWidth = 80;  // the hit images are fitted inside this, keeping their shape
     constexpr int toleranceLabelHeight = 44;
     constexpr float hitLineThickness = 8.f;
@@ -31,6 +31,10 @@ namespace
     constexpr float barlineAlpha = 0.3f;
     constexpr float beatLineAlpha = 0.15f;
     constexpr float laneLineAlpha = 0.5f;
+    // A key press flashes its lane's lines to this thickness, which tapers back to
+    // GuiStyle::thinLine over laneFlashDurationMs.
+    constexpr float laneFlashThickness = 4.f * (float) GuiStyle::thinLine;
+    constexpr double laneFlashDurationMs = 500.0;
 
     // One lane takes the whole home row; two lanes (Chart::MAX_LANES) split it between the hands (asdf / jkl;).
     std::vector<std::vector<int>> keysForLanes (int numLanes)
@@ -68,6 +72,7 @@ NoteLaneDisplay::NoteLaneDisplay (GameState* gs, int numLanes_) : gameState (gs)
 
     buttonIndicators.resize ((size_t) numLanes);
     indicatorLighting.assign ((size_t) numLanes, 0.f);
+    laneFlash.assign ((size_t) numLanes, 0.f);
     keys = keysForLanes (numLanes);
 }
 
@@ -155,6 +160,8 @@ void NoteLaneDisplay::advance (double elapsedMs)
 {
     for (auto& indicator : indicatorLighting)
         indicator = std::max (0.f, indicator - static_cast<float> (elapsedMs) * 0.001f);
+    for (auto& flash : laneFlash)
+        flash = std::max (0.f, flash - static_cast<float> (elapsedMs / laneFlashDurationMs));
 
     labelMissedNotesBefore (timeMs - gameState->tolerances[GameState::NUM_TOLERANCE_CATEGORIES - 1]);
 
@@ -184,6 +191,7 @@ ChartEvent* NoteLaneDisplay::registerKeyPress (const juce::KeyPress& key, long l
         if (std::find (keys[i].begin(), keys[i].end(), key.getKeyCode()) != keys[i].end())
         {
             indicatorLighting[i] = 1;
+            laneFlash[i] = 1;
             if (auto spot = keyPressPosition ((int) i, hitTimeMs))
                 ripples.push_back ({ *spot, (int) i, 0.0 });
             return findClosestNoteForHit ((int) i, hitTimeMs);
@@ -413,7 +421,18 @@ void NoteLaneDisplay::paint (juce::Graphics& g)
         for (int lane = 0; lane < numLanes; ++lane)
         {
             g.setColour (laneColour (lane).withAlpha (laneLineAlpha));
-            GuiStyle::fillHorizontalLine (g, laneY (area, lane), area.getX(), area.getRight(), GuiStyle::thinLine);
+            auto y = laneY (area, lane);
+            auto flash = laneFlash[(size_t) lane];
+            if (flash <= 0.f)
+            {
+                GuiStyle::fillHorizontalLine (g, y, area.getX(), area.getRight(), GuiStyle::thinLine);
+            }
+            else
+            {
+                // Tapers smoothly, so it can't keep to whole pixels like the resting line.
+                auto thickness = (float) GuiStyle::thinLine + (laneFlashThickness - (float) GuiStyle::thinLine) * flash;
+                g.fillRect (juce::Rectangle<float> (area.getX(), y - thickness * 0.5f, area.getWidth(), thickness));
+            }
         }
     }
 

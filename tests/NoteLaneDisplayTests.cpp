@@ -61,17 +61,17 @@ namespace
     };
 
     // The top grid line spans x 5 to 395 and y 5 to 134, split between its two rows at x 200.
-    // Its inner area spans y 14 to 125, and x 38 to 362 (kept a note's width from the sides);
-    // the top-left row's x 38 to 200 is the bar's 1000 ms. The bottom grid line is 135 px down.
+    // Its inner area spans y 14 to 125, and x 24 to 376 (kept a note's width from the sides);
+    // the top-left row's x 24 to 200 is the bar's 1000 ms. The bottom grid line is 135 px down.
     constexpr int topRowTop = 5, topRowBottom = 134;
     constexpr int innerTop = 14, innerBottom = 125;
-    // Left of every note the tests place (the earliest at 250 ms, reaching back to x 50), so
+    // Left of every note the tests place (the earliest at 250 ms, reaching back to x 54), so
     // only the lines are drawn there.
     constexpr int emptyColumnX = 40;
 
     int xAtTime (long long timeMs)
     {
-        return juce::roundToInt (38.0f + 162.0f * static_cast<float> (timeMs) / 1000.0f);
+        return juce::roundToInt (24.0f + 176.0f * static_cast<float> (timeMs) / 1000.0f);
     }
 
     bool sameRgb (juce::Colour a, juce::Colour b)
@@ -248,7 +248,7 @@ namespace
     // or bottom grid line, on lane 0's line.
     juce::Point<int> noteSpot (int row)
     {
-        return { row % 2 == 0 ? 119 : 281, row / 2 == 0 ? 51 : 186 };
+        return { row % 2 == 0 ? 112 : 288, row / 2 == 0 ? 51 : 186 };
     }
 
     // How opaque the note drawn at a spot is, from 0 (only the lane line shows) to 1. The
@@ -358,8 +358,8 @@ TEST_CASE ("Practice's bar numbering fades in the same way", "[ui][lanes][fade]"
 TEST_CASE ("Bars already played in the current grid line keep their beat lines", "[ui][lanes][fade]")
 {
     SixBarDisplay display;
-    // At 320 ms the beat line falls well inside a pixel column (x = 89.8). A time landing on
-    // a half pixel, like 250 ms (x = 78.5), can round either way under Release's /fp:fast,
+    // At 320 ms the beat line falls well inside a pixel column (x = 80.3). A time landing on
+    // a half pixel, like 125 ms (x = 46.5), can round either way under Release's /fp:fast,
     // so the line could be drawn a column off from the one checked.
     display.notes.emplace_back (320, ChartEvent::BEAT);
     display.events.insert ({ 320, &display.notes.back() });
